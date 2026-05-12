@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./registry": "./src/registry/index.ts",
-    "./db": "./src/db.ts"
+    "./db": "./src/db.ts",
+    "./query": "./src/query.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

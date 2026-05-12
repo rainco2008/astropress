@@ -1,84 +1,223 @@
-# Deployment Guide
+# Deployment
 
-## Cloudflare Stack
+AstroPress deploys to Cloudflare's free tier: **Pages** for hosting, **D1** for the database, and **R2** for media storage.
 
-AstroPress runs entirely on Cloudflare's free tier:
+---
 
-| Service | Used for |
-|---------|----------|
-| Cloudflare Pages | Hosting `apps/admin` and `apps/web` |
-| Cloudflare D1 | SQLite database |
-| Cloudflare R2 | Media file storage |
+## Prerequisites
 
-## Step-by-Step
-
-### 1. Create Cloudflare resources
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installed and authenticated
+- A Cloudflare account
 
 ```bash
-# Authenticate wrangler
-npx wrangler login
+npm install -g wrangler
+wrangler login
+```
 
-# Create D1 database — note the database_id in the output
+---
+
+## Step 1 — Create Cloudflare resources
+
+```bash
+# SQLite database
 npx wrangler d1 create astropress
+# → Note the database_id in the output
 
-# Create R2 bucket
+# Object storage for media
 npx wrangler r2 bucket create astropress-media
 
-# Create Pages projects
+# Pages projects (one per app)
 npx wrangler pages project create astropress-admin
 npx wrangler pages project create astropress-web
 ```
 
-### 2. Configure wrangler.toml files
+---
+
+## Step 2 — Configure wrangler.toml files
 
 Update `apps/admin/wrangler.toml`:
+
 ```toml
-database_id = "YOUR_ID_FROM_STEP_1"
+name = "astropress-admin"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "astropress"
+database_id = "YOUR_DATABASE_ID"   # ← paste from Step 1
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "astropress-media"
+
+[vars]
+SITE_URL = "https://astropress-web.pages.dev"
 ```
 
 Update `apps/web/wrangler.toml`:
+
 ```toml
-database_id = "YOUR_ID_FROM_STEP_1"
+name = "astropress-web"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "astropress"
+database_id = "YOUR_DATABASE_ID"   # ← same database ID
 ```
 
-### 3. Run migrations
+---
+
+## Step 3 — Run migrations on the remote database
 
 ```bash
+cd packages/core
 npx wrangler d1 migrations apply astropress --remote
 ```
 
-### 4. Deploy manually (first time)
+---
+
+## Step 4 — Set environment variables
+
+In the Cloudflare Pages dashboard for **astropress-admin**, go to **Settings → Environment variables** and add:
+
+| Variable | Value |
+|----------|-------|
+| `AUTH_SECRET` | A random 32-character string |
+| `SITE_URL` | The full URL of your web Pages project |
+
+Generate a secret:
+```bash
+openssl rand -base64 32
+```
+
+---
+
+## Step 5 — Build and deploy manually (first time)
 
 ```bash
 pnpm build
-cd apps/admin && npx wrangler pages deploy dist --project-name astropress-admin
-cd ../web && npx wrangler pages deploy dist --project-name astropress-web
+
+# Deploy admin
+cd apps/admin
+npx wrangler pages deploy dist --project-name astropress-admin
+
+# Deploy web
+cd ../web
+npx wrangler pages deploy dist --project-name astropress-web
 ```
 
-### 5. Set up GitHub Actions (CI/CD)
+---
 
-Add these secrets to your GitHub repo:
+## Step 6 — Set up CI/CD with GitHub Actions
 
-- `CLOUDFLARE_API_TOKEN` — create at dash.cloudflare.com → My Profile → API Tokens
-  - Permissions: `Cloudflare Pages:Edit`, `D1:Edit`, `Workers R2 Storage:Edit`
-- `CF_ACCOUNT_ID` — found on the right side of the Cloudflare dashboard homepage
+Add these secrets to your GitHub repository (**Settings → Secrets and variables → Actions**):
 
-Push to `main` to trigger automatic deploys.
+| Secret | How to get it |
+|--------|--------------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" template, add Pages + D1 + R2 permissions |
+| `CF_ACCOUNT_ID` | Cloudflare dashboard → right sidebar |
 
-## First Boot
+Create `.github/workflows/deploy.yml`:
 
-Visit your admin Pages URL. The setup wizard will:
-1. Accept your site title, URL, and admin credentials
-2. Seed the options table
-3. Mark setup as complete
+```yaml
+name: Deploy
 
-You will not see the wizard again after setup.
+on:
+  push:
+    branches: [main]
 
-## Environment Variables
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-Set these in Cloudflare Pages dashboard under **Settings → Environment variables**:
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-| Variable | Example |
-|----------|---------|
-| `SITE_URL` | `https://my-blog.pages.dev` |
-| `AUTH_SECRET` | 32-character random string |
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install
+
+      - name: Run D1 migrations
+        run: cd packages/core && npx wrangler d1 migrations apply astropress --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy admin
+        run: npx wrangler pages deploy apps/admin/dist --project-name astropress-admin
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Deploy web
+        run: npx wrangler pages deploy apps/web/dist --project-name astropress-web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+```
+
+Push to `main` — the workflow builds, migrates, and deploys both apps automatically.
+
+---
+
+## First boot
+
+Visit your admin Pages URL (e.g. `https://astropress-admin.pages.dev`). The **setup wizard** runs automatically on first visit:
+
+1. Enter your site title and URL
+2. Create an admin username, email, and password
+3. Submit — the wizard writes to D1 and marks setup as complete
+
+You will not see the wizard again.
+
+---
+
+## Custom domains
+
+In the Cloudflare Pages dashboard for each project:
+
+1. **Custom domains** → **Set up a custom domain**
+2. Enter your domain (e.g. `admin.mysite.com`)
+3. Follow the DNS instructions
+
+Update `SITE_URL` in the admin environment variables to match the web app's custom domain after setting it.
+
+---
+
+## Environment variables reference
+
+| Variable | App | Required | Description |
+|----------|-----|----------|-------------|
+| `DATABASE_URL` | Both | Dev only | SQLite file path (`file:./local.db`) |
+| `AUTH_SECRET` | Admin | Production | 32+ char session signing key |
+| `SITE_URL` | Admin | Production | Full URL of `apps/web` |
+| `R2_BUCKET` | Admin | Production | R2 bucket name for media |
+
+In production on Cloudflare, the D1 database is injected automatically via the `DB` binding — no `DATABASE_URL` needed.
+
+---
+
+## Local dev with production D1
+
+To test against the remote D1 database locally:
+
+```bash
+cd apps/admin
+npx wrangler pages dev dist --d1=DB=YOUR_DATABASE_ID
+```
+
+Note: this uses the remote database — changes will be real.
