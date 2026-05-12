@@ -1,0 +1,54 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { listPosts } from "../../../lib/posts";
+
+const db = Astro.locals.db;
+const page = Number(Astro.url.searchParams.get("page") ?? "1");
+const { posts, total } = db
+  ? await listPosts(db, { type: "page", page })
+  : { posts: [], total: 0 };
+---
+<AdminLayout title="Pages">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 style="margin:0;font-size:22px;font-weight:600">Pages</h1>
+    <a href="/admin/pages/new" style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">+ New Page</a>
+  </div>
+
+  {posts.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:40px;text-align:center;color:#646970">
+      No pages yet. <a href="/admin/pages/new" style="color:#2271b1">Create your first page →</a>
+    </div>
+  ) : (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f6f7f7;border-bottom:1px solid #dcdcde">
+            <th style="text-align:left;padding:10px 16px;font-weight:600">Title</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600">Status</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600">Date</th>
+            <th style="padding:10px 16px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((p) => (
+            <tr style="border-bottom:1px solid #f0f0f1">
+              <td style="padding:12px 16px">
+                <a href={`/admin/pages/${p.id}`} style="font-weight:600;color:#1d2327;text-decoration:none">{p.title || <em>Untitled</em>}</a>
+                <div style="font-size:11px;color:#646970;margin-top:2px">/{p.slug}</div>
+              </td>
+              <td style="padding:12px 16px">
+                <span style={`font-size:11px;padding:2px 8px;border-radius:10px;background:${p.status === "publish" ? "#d1e7dd" : "#fff3cd"};color:${p.status === "publish" ? "#146c43" : "#997404"};font-weight:600`}>
+                  {p.status === "publish" ? "Published" : p.status}
+                </span>
+              </td>
+              <td style="padding:12px 16px;color:#646970;font-size:12px">{p.date.slice(0,10)}</td>
+              <td style="padding:12px 16px;text-align:right">
+                <a href={`/admin/pages/${p.id}`} style="font-size:12px;color:#2271b1;text-decoration:none">Edit</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>

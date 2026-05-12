@@ -1,0 +1,98 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { listPosts } from "../../../lib/posts";
+
+const db = Astro.locals.db;
+const status = Astro.url.searchParams.get("status") ?? undefined;
+const page = Number(Astro.url.searchParams.get("page") ?? "1");
+
+const { posts, total } = db
+  ? await listPosts(db, { type: "post", status, page })
+  : { posts: [], total: 0 };
+
+const perPage = 20;
+const totalPages = Math.ceil(total / perPage);
+
+const statusOptions = [
+  { value: "", label: "All" },
+  { value: "publish", label: "Published" },
+  { value: "draft", label: "Draft" },
+  { value: "trash", label: "Trash" },
+];
+---
+<AdminLayout title="Posts">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 style="margin:0;font-size:22px;font-weight:600">Posts</h1>
+    <a href="/admin/posts/new" style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">
+      + New Post
+    </a>
+  </div>
+
+  <!-- Status filter tabs -->
+  <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #dcdcde">
+    {statusOptions.map((s) => (
+      <a
+        href={s.value ? `/admin/posts?status=${s.value}` : "/admin/posts"}
+        style={`padding:8px 14px;font-size:13px;text-decoration:none;border-bottom:2px solid ${(status ?? "") === s.value ? "#2271b1" : "transparent"};color:${(status ?? "") === s.value ? "#2271b1" : "#646970"}`}
+      >
+        {s.label}
+      </a>
+    ))}
+  </div>
+
+  {posts.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:40px;text-align:center;color:#646970">
+      No posts found. <a href="/admin/posts/new" style="color:#2271b1">Create your first post →</a>
+    </div>
+  ) : (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f6f7f7;border-bottom:1px solid #dcdcde">
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Title</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Status</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Date</th>
+            <th style="padding:10px 16px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((post) => (
+            <tr style="border-bottom:1px solid #f0f0f1">
+              <td style="padding:12px 16px">
+                <a href={`/admin/posts/${post.id}`} style="font-weight:600;color:#1d2327;text-decoration:none;font-size:14px">
+                  {post.title || <em style="color:#646970">Untitled</em>}
+                </a>
+                <div style="font-size:11px;color:#646970;margin-top:2px">/{post.slug}</div>
+              </td>
+              <td style="padding:12px 16px">
+                <span style={`font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : "#997404"}`}>
+                  {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                </span>
+              </td>
+              <td style="padding:12px 16px;color:#646970;font-size:12px">
+                {post.date.slice(0, 10)}
+              </td>
+              <td style="padding:12px 16px;text-align:right">
+                <a href={`/admin/posts/${post.id}`} style="font-size:12px;color:#2271b1;text-decoration:none">Edit</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  <!-- Pagination -->
+  {totalPages > 1 && (
+    <div style="display:flex;gap:6px;margin-top:16px;justify-content:center">
+      {Array.from({length: totalPages}, (_, i) => i + 1).map((p) => (
+        <a
+          href={`/admin/posts?page=${p}${status ? `&status=${status}` : ""}`}
+          style={`padding:5px 10px;border:1px solid #dcdcde;border-radius:3px;font-size:13px;text-decoration:none;background:${p === page ? "#2271b1" : "#fff"};color:${p === page ? "#fff" : "#2271b1"}`}
+        >
+          {p}
+        </a>
+      ))}
+    </div>
+  )}
+</AdminLayout>

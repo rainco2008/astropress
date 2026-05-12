@@ -1,0 +1,69 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { getFieldGroups } from "@astropress/core/registry";
+
+const groups = getFieldGroups();
+---
+<AdminLayout title="Custom Fields">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <h1 style="margin:0;font-size:22px;font-weight:600;color:#1d2327">Custom Fields</h1>
+    <a href="/admin/custom-fields/new" style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">
+      + Add Field Group
+    </a>
+  </div>
+
+  {groups.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:60px 40px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">⚙️</div>
+      <h2 style="font-size:18px;font-weight:600;color:#1d2327;margin:0 0 8px">No Field Groups Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px">
+        Create field groups to add custom fields to your posts, pages, and custom post types.
+      </p>
+      <a href="/admin/custom-fields/new" style="background:#2271b1;color:#fff;padding:9px 20px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">
+        Add Your First Field Group
+      </a>
+    </div>
+  ) : (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f6f7f7;border-bottom:1px solid #dcdcde">
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Title</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Fields</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Location</th>
+            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Status</th>
+            <th style="padding:10px 16px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(group => (
+            <tr style="border-bottom:1px solid #f0f0f1">
+              <td style="padding:12px 16px">
+                <a href={`/admin/custom-fields/${group.id}`} style="font-weight:600;color:#1d2327;text-decoration:none;font-size:14px">
+                  {group.title}
+                </a>
+                <div style="font-size:11px;color:#646970;font-family:monospace;margin-top:1px">{group.key}</div>
+              </td>
+              <td style="padding:12px 16px;color:#646970">
+                {group.fields.length} {group.fields.length === 1 ? "field" : "fields"}
+              </td>
+              <td style="padding:12px 16px;color:#646970;font-size:12px">
+                {group.location?.[0]?.[0] ? (
+                  <span>{group.location[0][0].param} {group.location[0][0].operator} {group.location[0][0].value}</span>
+                ) : "—"}
+              </td>
+              <td style="padding:12px 16px">
+                <span style={`font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${group.active ? "#d1e7dd" : "#f0f0f1"};color:${group.active ? "#146c43" : "#646970"}`}>
+                  {group.active ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td style="padding:12px 16px;text-align:right">
+                <a href={`/admin/custom-fields/${group.id}`} style="font-size:12px;color:#2271b1;text-decoration:none">Edit</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>

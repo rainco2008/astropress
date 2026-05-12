@@ -1,0 +1,77 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+
+const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
+let forms: any[] = [];
+try {
+  const [row] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+    .where(eq(wpOptions.optionName, "astropress_forms")).limit(1);
+  forms = row?.value ? JSON.parse(row.value) : [];
+} catch {}
+
+forms.sort((a: any, b: any) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+---
+<AdminLayout title="Forms">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+    <h1 class="page-title" style="margin:0;">Forms</h1>
+    <a href="/admin/forms/create"
+       style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:4px;text-decoration:none;font-size:13px;font-weight:600;">
+      + Add New Form
+    </a>
+  </div>
+
+  {forms.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:48px;text-align:center;color:#646970;">
+      <p style="font-size:15px;margin:0 0 16px;">No forms yet.</p>
+      <a href="/admin/forms/create" style="background:#2271b1;color:#fff;padding:8px 18px;border-radius:4px;text-decoration:none;font-size:13px;">
+        Create Your First Form
+      </a>
+    </div>
+  ) : (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#f6f7f7;">
+            <th style="padding:10px 16px;text-align:left;font-weight:600;color:#3c434a;">Name</th>
+            <th style="padding:10px 16px;text-align:left;font-weight:600;color:#3c434a;">Fields</th>
+            <th style="padding:10px 16px;text-align:left;font-weight:600;color:#3c434a;">Short Code</th>
+            <th style="padding:10px 16px;text-align:left;font-weight:600;color:#3c434a;">Last Modified</th>
+            <th style="padding:10px 16px;text-align:left;font-weight:600;color:#3c434a;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {forms.map((form: any) => (
+            <tr style="border-top:1px solid #f0f0f0;">
+              <td style="padding:12px 16px;font-weight:600;">
+                <a href={`/admin/forms/${form.id}`} style="color:#2271b1;text-decoration:none;">{form.title ?? form.name}</a>
+              </td>
+              <td style="padding:12px 16px;color:#646970;">{(form.fields ?? []).filter((f:any) => !["page_break","section_divider","html"].includes(f.type)).length}</td>
+              <td style="padding:12px 16px;">
+                <code style="font-size:11px;background:#f6f7f7;padding:2px 6px;border-radius:3px;">[wpforms id="{form.id}"]</code>
+              </td>
+              <td style="padding:12px 16px;color:#646970;">{form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : "—"}</td>
+              <td style="padding:12px 16px;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <a href={`/admin/forms/${form.id}`} style="color:#2271b1;text-decoration:none;font-size:12px;">Edit</a>
+                  <span style="color:#dcdcde;">|</span>
+                  <a href={`/admin/forms/${form.id}/entries`} style="color:#2271b1;text-decoration:none;font-size:12px;">Entries</a>
+                  <span style="color:#dcdcde;">|</span>
+                  <a href={`/forms/${form.id}`} target="_blank" style="color:#2271b1;text-decoration:none;font-size:12px;">Preview</a>
+                  <span style="color:#dcdcde;">|</span>
+                  <button
+                    onclick={`if(confirm('Delete form "${form.title ?? form.name}"?')){fetch('/api/forms/${form.id}',{method:'DELETE'}).then(()=>location.reload())}`}
+                    style="background:none;border:none;color:#dc3232;cursor:pointer;font-size:12px;padding:0;"
+                  >Delete</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+.cache/
+.turbo/
+*.local
+.env
+.env.*
+!.env.example
+.wrangler/

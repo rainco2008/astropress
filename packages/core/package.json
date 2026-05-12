@@ -1,0 +1,27 @@
+{
+  "name": "@astropress/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./registry": "./src/registry/index.ts",
+    "./db": "./src/db.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.36.0",
+    "@libsql/client": "^0.14.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "drizzle-kit": "^0.28.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

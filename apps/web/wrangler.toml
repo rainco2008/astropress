@@ -1,0 +1,12 @@
+name = "astropress-web"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "astropress"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[vars]
+SITE_URL = "https://your-site.pages.dev"

@@ -1,0 +1,132 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { listMedia } from "../../../lib/media";
+
+const db = Astro.locals.db;
+const page = Number(Astro.url.searchParams.get("page") ?? "1");
+
+const { items, total } = db
+  ? await listMedia(db, { page })
+  : { items: [], total: 0 };
+
+const perPage = 40;
+const totalPages = Math.ceil(total / perPage);
+---
+<AdminLayout title="Media Library">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <h1 style="margin:0;font-size:22px;font-weight:600">Media Library</h1>
+    <label style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;font-size:13px;font-weight:600;cursor:pointer">
+      + Upload
+      <input id="upload-input" type="file" accept="image/*,video/*,application/pdf" multiple style="display:none" onchange="handleUpload(this)" />
+    </label>
+  </div>
+
+  <!-- Upload progress -->
+  <div id="upload-progress" style="display:none;background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:14px;margin-bottom:16px;font-size:13px;color:#646970">
+    Uploading…
+  </div>
+
+  {items.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:60px;text-align:center;color:#646970">
+      <div style="font-size:40px;margin-bottom:12px">🖼️</div>
+      <p style="margin:0 0 12px">No media yet.</p>
+      <label style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:3px;font-size:13px;cursor:pointer">
+        Upload your first file
+        <input type="file" accept="image/*" style="display:none" onchange="handleUpload(this)" />
+      </label>
+    </div>
+  ) : (
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px" id="media-grid">
+      {items.map((item) => (
+        <div
+          class="media-item"
+          data-id={item.id}
+          style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;cursor:pointer;transition:border-color 0.15s"
+          onclick="selectItem(this)"
+        >
+          {item.mimeType.startsWith("image/") ? (
+            <img
+              src={item.url}
+              alt={item.title}
+              style="width:100%;height:120px;object-fit:cover;display:block"
+              loading="lazy"
+            />
+          ) : (
+            <div style="width:100%;height:120px;display:flex;align-items:center;justify-content:center;background:#f6f7f7;font-size:32px">
+              📄
+            </div>
+          )}
+          <div style="padding:8px">
+            <div style="font-size:11px;font-weight:600;color:#1d2327;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{item.title || item.filename}</div>
+            <div style="font-size:10px;color:#646970;margin-top:2px">{item.mimeType}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  <!-- Item details panel (hidden by default) -->
+  <div id="item-details" style="display:none;position:fixed;top:0;right:0;width:300px;height:100vh;background:#fff;border-left:1px solid #dcdcde;padding:20px;overflow-y:auto;z-index:100;box-shadow:-4px 0 12px rgba(0,0,0,.08)">
+    <button onclick="closeDetails()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:18px;cursor:pointer;color:#646970">✕</button>
+    <div id="details-content"></div>
+  </div>
+
+  {totalPages > 1 && (
+    <div style="display:flex;gap:6px;margin-top:20px;justify-content:center">
+      {Array.from({length: totalPages}, (_, i) => i + 1).map((p) => (
+        <a
+          href={`/admin/medias?page=${p}`}
+          style={`padding:5px 10px;border:1px solid #dcdcde;border-radius:3px;font-size:13px;text-decoration:none;background:${p === page ? "#2271b1" : "#fff"};color:${p === page ? "#fff" : "#2271b1"}`}
+        >
+          {p}
+        </a>
+      ))}
+    </div>
+  )}
+
+  <script>
+    async function handleUpload(input: HTMLInputElement) {
+      const files = Array.from(input.files ?? []);
+      if (!files.length) return;
+
+      const progress = document.getElementById("upload-progress") as HTMLElement | null;
+      if (!progress) return;
+      progress.style.display = "block";
+
+      for (const file of files) {
+        progress.textContent = `Uploading ${file.name}…`;
+        const form = new FormData();
+        form.append("file", file);
+        await fetch("/api/media/upload", { method: "POST", body: form });
+      }
+
+      progress.textContent = "Done! Refreshing…";
+      setTimeout(() => location.reload(), 800);
+    }
+
+    function selectItem(el: HTMLElement) {
+      document.querySelectorAll(".media-item").forEach((i) => (i as HTMLElement).style.borderColor = "#dcdcde");
+      el.style.borderColor = "#2271b1";
+      const title = el.querySelector("div div:first-child")?.textContent ?? "";
+      const imgSrc = (el.querySelector("img") as HTMLImageElement | null)?.src ?? "";
+      const mime = el.querySelector("div div:last-child")?.textContent ?? "";
+      const details = document.getElementById("details-content") as HTMLElement | null;
+      if (!details) return;
+      details.innerHTML = `
+        ${imgSrc ? `<img src="${imgSrc}" style="width:100%;border-radius:4px;margin-bottom:12px" />` : ""}
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">${title}</div>
+        <div style="font-size:11px;color:#646970;margin-bottom:12px">${mime}</div>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">URL</label>
+        <input type="text" value="${imgSrc}" readonly style="width:100%;font-size:11px;padding:6px 8px;border:1px solid #dcdcde;border-radius:3px" onclick="this.select()" />
+      `;
+      const itemDetails = document.getElementById("item-details") as HTMLElement | null;
+      if (itemDetails) itemDetails.style.display = "block";
+    }
+
+    function closeDetails() {
+      const itemDetails = document.getElementById("item-details") as HTMLElement | null;
+      if (itemDetails) itemDetails.style.display = "none";
+      document.querySelectorAll(".media-item").forEach((i) => (i as HTMLElement).style.borderColor = "#dcdcde");
+    }
+  </script>
+</AdminLayout>

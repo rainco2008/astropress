@@ -1,0 +1,45 @@
+{
+  "name": "@astropress/admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/node": "^8.0.0",
+    "@astrojs/react": "^3.0.0",
+    "@astropress/api": "workspace:*",
+    "@astropress/auth": "workspace:*",
+    "@astropress/core": "workspace:*",
+    "@astropress/plugin-seo": "workspace:*",
+    "@astropress/ui": "workspace:*",
+    "@libsql/client": "^0.14.0",
+    "@wordpress/block-editor": "15.18.0",
+    "@wordpress/block-library": "9.45.0",
+    "@wordpress/blocks": "15.18.0",
+    "@wordpress/components": "33.0.0",
+    "@wordpress/compose": "^7.45.0",
+    "@wordpress/data": "10.45.0",
+    "@wordpress/element": "6.45.0",
+    "@wordpress/hooks": "^4.45.0",
+    "@wordpress/i18n": "^6.18.0",
+    "@wordpress/keyboard-shortcuts": "5.45.0",
+    "@wordpress/primitives": "^4.45.0",
+    "@wordpress/rich-text": "^7.45.0",
+    "astro": "^4.0.0",
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@cloudflare/workers-types": "^4.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0"
+  }
+}

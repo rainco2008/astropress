@@ -1,0 +1,33 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+
+const user = Astro.locals.user;
+
+const stats = [
+  { label: "Posts", value: 0, href: "/admin/posts", icon: "📝" },
+  { label: "Pages", value: 0, href: "/admin/pages", icon: "📄" },
+  { label: "Media", value: 0, href: "/admin/medias", icon: "🖼️" },
+];
+---
+<AdminLayout title="Dashboard">
+  <h1 class="page-title">Dashboard</h1>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px">
+    {stats.map((s) => (
+      <a href={s.href} style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:20px;text-decoration:none;color:inherit;display:block;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 1px 4px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+        <div style="font-size:22px;margin-bottom:6px">{s.icon}</div>
+        <div style="font-size:26px;font-weight:700;color:#1d2327">{s.value}</div>
+        <div style="font-size:13px;color:#646970;margin-top:2px">{s.label}</div>
+      </a>
+    ))}
+  </div>
+
+  <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:24px">
+    <h2 style="margin:0 0 8px;font-size:16px">Welcome{user ? `, ${user.displayName}` : ""}!</h2>
+    <p style="margin:0;color:#646970;font-size:14px">Your AstroPress CMS is running. Start by creating your first post.</p>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-title { font-size: 22px; font-weight: 600; margin: 0 0 24px; }
+</style>

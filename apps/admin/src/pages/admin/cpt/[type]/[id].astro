@@ -1,0 +1,197 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { getPost } from "../../../../lib/posts";
+import BlockEditor from "../../../../islands/BlockEditor";
+import { getSidebarPanels, getPostType } from "@astropress/core/registry";
+import SeoPanel from "../../../../islands/SeoPanel";
+import CustomFieldsPanel from "../../../../islands/CustomFieldsPanel";
+
+const db = Astro.locals.db;
+const user = Astro.locals.user;
+const type = Astro.params.type!;
+const id = Number(Astro.params.id);
+
+if (!db || !user) return Astro.redirect("/login");
+
+const postTypeConfig = getPostType(type);
+if (!postTypeConfig) return Astro.redirect("/admin/dashboard");
+
+const post = await getPost(db, id);
+if (!post) return Astro.redirect(`/admin/cpt/${type}`);
+
+const panels = getSidebarPanels(type);
+const backUrl = `/admin/cpt/${type}`;
+---
+<AdminLayout title={post.title || `Edit ${postTypeConfig.label}`}>
+  <div id="editor-root"
+    data-post-id={String(id)}
+    data-initial-slug={post.slug ?? ""}
+    data-back-url={backUrl}
+    style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start">
+
+    <!-- Left: Title + Block editor -->
+    <div>
+      <input
+        id="post-title"
+        type="text"
+        placeholder={`Add ${postTypeConfig.label.toLowerCase()} title`}
+        value={post.title}
+        style="width:100%;font-size:28px;font-weight:700;border:none;border-bottom:2px solid #dcdcde;padding:8px 0;margin-bottom:20px;outline:none;background:transparent;color:#1d2327"
+        oninput="updateSlug(this.value)"
+      />
+      <div style="font-size:12px;color:#646970;margin-bottom:16px">
+        Permalink: <span id="permalink-display" style="color:#2271b1">/{post.slug || "..."}</span>
+        <input id="post-slug" type="hidden" value={post.slug} />
+      </div>
+
+      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:20px;min-height:400px">
+        <BlockEditor
+          client:only="react"
+          initialContent={post.content}
+          postId={id}
+        />
+      </div>
+
+      <!-- Excerpt -->
+      <div style="margin-top:16px;background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Excerpt</label>
+        <textarea
+          id="post-excerpt"
+          rows="3"
+          placeholder="Optional excerpt…"
+          style="width:100%;font-size:13px;border:1px solid #dcdcde;border-radius:3px;padding:8px;resize:vertical;outline:none"
+        >{post.excerpt}</textarea>
+      </div>
+
+      <!-- Custom Fields -->
+      <div style="margin-top:16px">
+        <CustomFieldsPanel client:only="react" postId={id} postType={type} />
+      </div>
+    </div>
+
+    <!-- Right sidebar -->
+    <aside>
+      <!-- Publish box -->
+      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
+        <div style="background:#f6f7f7;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcde">
+          Publish
+        </div>
+        <div style="padding:14px">
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Status</label>
+            <select id="post-status" style="width:100%;padding:6px 8px;font-size:13px;border:1px solid #8c8f94;border-radius:3px">
+              <option value="draft" selected={post.status === "draft"}>Draft</option>
+              <option value="publish" selected={post.status === "publish"}>Published</option>
+              <option value="private" selected={post.status === "private"}>Private</option>
+            </select>
+          </div>
+
+          <div id="save-status" style="font-size:12px;color:#646970;margin-bottom:12px;min-height:16px"></div>
+
+          <div style="display:flex;gap:8px">
+            <button onclick="savePost('draft')" style="flex:1;padding:7px;font-size:13px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:3px;cursor:pointer">
+              Save Draft
+            </button>
+            <button onclick="savePost('publish')" style="flex:1;padding:7px;font-size:13px;background:#2271b1;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:600">
+              Publish
+            </button>
+          </div>
+
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f1">
+            <button
+              id="trash-btn"
+              style="font-size:12px;color:#d63638;background:none;border:none;cursor:pointer;padding:0"
+            >
+              Move to Trash
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View link -->
+      {post.status === "publish" && (
+        <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:12px 14px;margin-bottom:16px;font-size:12px">
+          <a href={`/${post.slug}`} target="_blank" style="color:#2271b1">View {postTypeConfig.label.toLowerCase()} →</a>
+        </div>
+      )}
+
+      <!-- Plugin sidebar panels -->
+      {panels.map((panel) => (
+        <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
+          <div style="background:#f6f7f7;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcde">
+            {panel.config.title}
+          </div>
+          <div style="padding:14px">
+            {panel.config.componentId === "SeoPanel" && (
+              <SeoPanel client:only="react" postId={id} />
+            )}
+          </div>
+        </div>
+      ))}
+    </aside>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var root = document.getElementById("editor-root");
+      var postId = root.dataset.postId;
+      var backUrl = root.dataset.backUrl;
+      var currentSlug = root.dataset.initialSlug;
+
+      function slugify(str) {
+        return str.toLowerCase().trim()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/[\s_]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+
+      window.updateSlug = function (title) {
+        var titleEl = document.getElementById("post-title");
+        if (!currentSlug || currentSlug === slugify(titleEl.defaultValue)) {
+          currentSlug = slugify(title);
+          document.getElementById("permalink-display").textContent = "/" + (currentSlug || "...");
+          document.getElementById("post-slug").value = currentSlug;
+        }
+      };
+
+      window.savePost = async function (forceStatus) {
+        var title = document.getElementById("post-title").value;
+        var status = forceStatus || document.getElementById("post-status").value;
+        var slug = document.getElementById("post-slug").value || slugify(title);
+        var excerpt = document.getElementById("post-excerpt").value;
+        var content = window.__editorContent || "";
+
+        document.getElementById("save-status").textContent = "Saving\u2026";
+
+        try {
+          var res = await fetch("/api/posts/" + postId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: title, content: content, excerpt: excerpt, status: status, slug: slug }),
+          });
+          if (res.ok) {
+            document.getElementById("save-status").textContent = "Saved \u2713";
+            document.getElementById("post-status").value = status;
+            setTimeout(function () { document.getElementById("save-status").textContent = ""; }, 3000);
+          } else {
+            document.getElementById("save-status").textContent = "Error saving";
+          }
+        } catch (e) {
+          document.getElementById("save-status").textContent = "Error saving";
+        }
+      };
+
+      document.getElementById("trash-btn").addEventListener("click", function () {
+        if (confirm("Move to trash?")) {
+          fetch("/api/posts/" + postId, { method: "DELETE" })
+            .then(function () { location.href = backUrl; });
+        }
+      });
+
+      setInterval(function () {
+        var title = document.getElementById("post-title").value;
+        if (title) window.savePost(null);
+      }, 60000);
+    })();
+  </script>
+</AdminLayout>

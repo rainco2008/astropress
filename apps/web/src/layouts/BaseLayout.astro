@@ -1,0 +1,69 @@
+---
+import { themeStyles } from "@astropress/theme-default";
+import { getSiteOptions, getNavMenu } from "../lib/query";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+
+const db = Astro.locals.db;
+
+const site = db
+  ? await getSiteOptions(db)
+  : { blogname: "AstroPress", blogdescription: "", siteurl: "" };
+
+const navItems = db ? await getNavMenu(db, "primary") : [];
+
+const pageTitle = title ? `${title} — ${site.blogname}` : site.blogname;
+const metaDesc = description || site.blogdescription;
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    {metaDesc && <meta name="description" content={metaDesc} />}
+    <style set:html={themeStyles} />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-wrapper">
+        <div class="site-branding">
+          <a href="/">{site.blogname}</a>
+          {site.blogdescription && (
+            <div class="site-description">{site.blogdescription}</div>
+          )}
+        </div>
+        {navItems.length > 0 && (
+          <nav aria-label="Primary navigation">
+            <ul class="site-nav">
+              {navItems.map((item) => (
+                <li>
+                  <a href={item.url}>{item.title}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+      </div>
+    </header>
+
+    <main class="site-main">
+      <div class="site-wrapper">
+        <slot />
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-wrapper">
+        <p>
+          Proudly powered by <a href="https://github.com/astropress-cms/astropress">AstroPress</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

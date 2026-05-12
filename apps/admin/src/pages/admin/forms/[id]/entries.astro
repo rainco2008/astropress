@@ -1,0 +1,13 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import FormEntries from "../../../../islands/FormEntries";
+
+const { id } = Astro.params;
+if (!Astro.locals.user) return Astro.redirect("/login");
+---
+<AdminLayout title="Form Entries">
+  <div style="margin-bottom:12px;">
+    <a href={`/admin/forms/${id}`} style="color:#2271b1;text-decoration:none;font-size:13px;">← Back to Form</a>
+  </div>
+  <FormEntries client:only="react" formId={id!} />
+</AdminLayout>

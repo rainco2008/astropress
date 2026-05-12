@@ -1,0 +1,58 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { getLoadedPlugins } from "@astropress/core";
+import { getSidebarPanels } from "@astropress/core/registry";
+
+const plugins = getLoadedPlugins();
+const panels = getSidebarPanels();
+---
+<AdminLayout title="Plugins">
+  <h1 style="margin:0 0 24px;font-size:22px;font-weight:600">Plugins</h1>
+
+  {plugins.length === 0 ? (
+    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:40px;text-align:center;color:#646970">
+      No plugins loaded. Add plugins to the <code>plugins/</code> directory.
+    </div>
+  ) : (
+    <div style="display:grid;gap:12px">
+      {plugins.map((p) => {
+        const panelCount = panels.filter((panel) =>
+          p.config.name === "seo" ? panel.config.componentId === "SeoPanel" : false
+        ).length;
+        return (
+          <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:20px;display:flex;align-items:flex-start;gap:16px">
+            <div style="font-size:32px;flex-shrink:0">🔌</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                <span style="font-size:15px;font-weight:700">{p.config.name}</span>
+                <span style="font-size:11px;background:#d1e7dd;color:#146c43;padding:2px 8px;border-radius:10px;font-weight:600">
+                  Active
+                </span>
+                <span style="font-size:11px;color:#646970">v{p.config.version}</span>
+              </div>
+              {p.config.description && (
+                <p style="margin:0 0 8px;font-size:13px;color:#646970">{p.config.description}</p>
+              )}
+              {panelCount > 0 && (
+                <div style="font-size:11px;color:#2271b1">
+                  📊 {panelCount} sidebar panel{panelCount > 1 ? "s" : ""} registered
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  )}
+
+  <div style="margin-top:24px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;padding:16px 20px">
+    <h2 style="margin:0 0 8px;font-size:14px;font-weight:600">Adding Plugins</h2>
+    <p style="margin:0;font-size:13px;color:#646970">
+      Create a package in <code style="background:#e9ecef;padding:1px 5px;border-radius:2px">plugins/your-plugin/</code> that exports a
+      <code style="background:#e9ecef;padding:1px 5px;border-radius:2px">definePlugin(…)</code> default, then import and
+      call <code style="background:#e9ecef;padding:1px 5px;border-radius:2px">loadPlugin()</code> in
+      <code style="background:#e9ecef;padding:1px 5px;border-radius:2px">apps/admin/src/plugins.ts</code>.
+      See <a href="/docs/plugin-api.md" style="color:#2271b1">docs/plugin-api.md</a> for the full API.
+    </p>
+  </div>
+</AdminLayout>

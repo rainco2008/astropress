@@ -1,0 +1,59 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getPostBySlug } from "../lib/query";
+import { buildFormHtml, APF_STYLES, APF_SCRIPT } from "../lib/formRenderer";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+
+const db = Astro.locals.db;
+const { slug } = Astro.params;
+
+if (!slug) return Astro.redirect("/");
+
+const page = db ? await getPostBySlug(db, slug, "page") : null;
+
+if (!page) {
+  return new Response(null, { status: 404 });
+}
+
+// Strip Gutenberg block comments
+function stripComments(raw: string): string {
+  return raw.replace(/<!-- \/?wp:[^\-].*?-->/gs, "").trim();
+}
+
+// Replace <div class="wp-block-astropress-form" data-form-id="ID"></div>
+// with server-rendered form HTML.
+async function renderContent(raw: string): Promise<{ html: string; hasForms: boolean }> {
+  const stripped = stripComments(raw);
+  const formIds = [...stripped.matchAll(/data-form-id="([^"]+)"/g)].map(m => m[1]);
+
+  if (formIds.length === 0 || !db) {
+    return { html: stripped, hasForms: false };
+  }
+
+  const [row] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+    .where(eq(wpOptions.optionName, "astropress_forms")).limit(1);
+  const allForms: any[] = row?.value ? JSON.parse(row.value) : [];
+  const formsById: Record<string, any> = {};
+  for (const f of allForms) formsById[f.id] = f;
+
+  const html = stripped.replace(
+    /<div[^>]*class="wp-block-astropress-form"[^>]*data-form-id="([^"]+)"[^>]*>[\s\S]*?<\/div>/g,
+    (_, fid) => formsById[fid] ? buildFormHtml(formsById[fid]) : `<div style="padding:12px;border:1px solid #dcdcde;border-radius:4px;color:#646970;font-size:13px;">Form not found.</div>`
+  );
+
+  return { html, hasForms: true };
+}
+
+const { html: contentHtml, hasForms } = await renderContent(page.content);
+---
+<BaseLayout title={page.title}>
+  {hasForms && <Fragment set:html={APF_STYLES} />}
+  <article>
+    <header class="post-header">
+      <h1>{page.title}</h1>
+    </header>
+    <div class="post-content" set:html={contentHtml} />
+  </article>
+  {hasForms && <Fragment set:html={APF_SCRIPT} />}
+</BaseLayout>
