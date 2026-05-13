@@ -3,7 +3,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  appliedActions?: string[]; // labels of auto-applied actions
+  appliedActions?: ActionChip[];
+}
+
+interface ActionChip {
+  label: string;
+  ok: boolean;
 }
 
 interface Action {
@@ -15,25 +20,10 @@ interface AIWidgetProps {
   pageContext?: Record<string, any>;
 }
 
-// ─── Quick prompts ────────────────────────────────────────────────────────────
+// Client-side action types — everything else goes to /api/ai/execute
+const CLIENT_SIDE = new Set(["setTitle", "setContent", "setExcerpt", "setStatus", "savePost", "navigate"]);
 
-const QUICK_PROMPTS: Record<string, { label: string; prompt: string }[]> = {
-  post: [
-    { label: "Write intro", prompt: "Write an engaging introduction for this post and set it as the content." },
-    { label: "Generate title", prompt: "Generate a compelling title for this post and update it." },
-    { label: "Write excerpt", prompt: "Write a concise meta description for this post and set it as the excerpt." },
-    { label: "Full draft", prompt: "Write a complete draft post based on the current title and set it as the content." },
-  ],
-  dashboard: [
-    { label: "New post idea", prompt: "Suggest a blog post idea and create a new draft for it." },
-    { label: "What can you do?", prompt: "What can you help me with in this CMS?" },
-    { label: "Site audit", prompt: "Give me a quick content strategy checklist for my site." },
-  ],
-  default: [
-    { label: "What can you do?", prompt: "What can you help me with on this page?" },
-    { label: "Create a post", prompt: "Create a new draft blog post with a good title and intro." },
-  ],
-};
+// ─── Session persistence ───────────────────────────────────────────────────────
 
 const SESSION_KEY = "ap_ai_widget";
 
@@ -59,12 +49,10 @@ function loadSession(): Session | null {
   return null;
 }
 
-// ─── Auto-execute action blocks ───────────────────────────────────────────────
+// ─── Action execution ─────────────────────────────────────────────────────────
 
-function executeAction(
-  action: Action,
-  persistAndNavigate: (url: string) => void
-): string | null {
+/** Execute a client-side DOM action. Returns label or null if not applicable. */
+function executeClientAction(action: Action, persistAndNavigate: (url: string, pending: Action[]) => void): string | null {
   switch (action.type) {
     case "setTitle": {
       const el = document.getElementById("post-title") as HTMLInputElement | null;
@@ -95,10 +83,6 @@ function executeAction(
       }
       return null;
     }
-    case "navigate": {
-      persistAndNavigate(action.url);
-      return `Opening ${action.url}…`;
-    }
     case "savePost": {
       if (typeof (window as any).savePost === "function") {
         setTimeout(() => (window as any).savePost(action.status ?? null), 400);
@@ -106,48 +90,111 @@ function executeAction(
       }
       return null;
     }
+    case "navigate": {
+      persistAndNavigate(action.url, []);
+      return `Opening ${action.url}…`;
+    }
     default:
       return null;
   }
 }
 
-function parseAndExecute(
+/** Execute server-side actions via /api/ai/execute. Returns result chips. */
+async function executeServerActions(actions: Action[]): Promise<{ chips: ActionChip[]; navigateTo: string | null }> {
+  if (!actions.length) return { chips: [], navigateTo: null };
+
+  const chips: ActionChip[] = [];
+  let navigateTo: string | null = null;
+
+  try {
+    const res = await fetch("/api/ai/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actions }),
+    });
+    const data = await res.json();
+    const results: Array<{ success: boolean; message: string; navigate?: string }> = data.results ?? [];
+
+    for (const r of results) {
+      chips.push({ label: r.message, ok: r.success });
+      if (r.navigate) navigateTo = r.navigate;
+    }
+  } catch (e: any) {
+    chips.push({ label: e.message ?? "Server action failed", ok: false });
+  }
+
+  return { chips, navigateTo };
+}
+
+/** Parse AI response, run all actions, return chips + stripped content. */
+async function processResponse(
   text: string,
-  messages: Message[],
-  onNavigate: (url: string, pending: Action[]) => void
-): { content: string; applied: string[] } {
-  // First pass: collect all actions
+  persistAndNavigate: (url: string, pending: Action[]) => void
+): Promise<{ content: string; chips: ActionChip[] }> {
+  // Extract action blocks
   const allActions: Action[] = [];
   const content = text
     .replace(/```action\n([\s\S]*?)```/g, (_, json) => {
-      try { allActions.push(JSON.parse(json.trim()) as Action); } catch {}
+      try { allActions.push(JSON.parse(json.trim())); } catch {}
       return "";
     })
     .trim();
 
+  const serverActions = allActions.filter((a) => !CLIENT_SIDE.has(a.type));
+  const clientActions = allActions.filter((a) => CLIENT_SIDE.has(a.type) && a.type !== "navigate");
   const navigateAction = allActions.find((a) => a.type === "navigate");
-  const otherActions = allActions.filter((a) => a.type !== "navigate");
 
-  const applied: string[] = [];
+  const chips: ActionChip[] = [];
 
-  if (navigateAction) {
-    // Content actions can't run on current page if we're navigating to a new one.
-    // Save them as pending so the new page picks them up.
-    onNavigate(navigateAction.url, otherActions);
-    applied.push(`Opening ${navigateAction.url}…`);
-    if (otherActions.length) {
-      applied.push(`Will apply ${otherActions.length} action(s) on next page`);
-    }
+  // 1. Run server-side actions first
+  const { chips: serverChips, navigateTo: serverNav } = await executeServerActions(serverActions);
+  chips.push(...serverChips);
+
+  const finalNav = serverNav ?? navigateAction?.url ?? null;
+
+  if (finalNav) {
+    // Save client-side DOM actions as pending for the next page
+    persistAndNavigate(finalNav, clientActions);
+    chips.push({ label: `Opening ${finalNav}…`, ok: true });
   } else {
-    // No navigation — execute all immediately
-    for (const action of otherActions) {
-      const result = executeAction(action, () => {});
-      if (result) applied.push(result);
+    // Run client-side actions on the current page
+    for (const action of clientActions) {
+      const label = executeClientAction(action, persistAndNavigate);
+      if (label) chips.push({ label, ok: true });
     }
   }
 
-  return { content, applied };
+  return { content, chips };
 }
+
+// ─── Quick prompts ────────────────────────────────────────────────────────────
+
+const QUICK_PROMPTS: Record<string, { label: string; prompt: string }[]> = {
+  post: [
+    { label: "Write intro", prompt: "Write an engaging introduction for this post and set it as the content." },
+    { label: "Generate title", prompt: "Generate a compelling title for this post and update it." },
+    { label: "Write excerpt", prompt: "Write a concise excerpt for this post." },
+    { label: "Full draft", prompt: "Write a complete draft based on the current title and set the content." },
+    { label: "Publish", prompt: "Publish this post." },
+  ],
+  dashboard: [
+    { label: "New blog post", prompt: "Create a new draft blog post with a good title and intro." },
+    { label: "New page", prompt: "Create a new draft page." },
+    { label: "Create contact form", prompt: "Create a contact form with Name, Email, and Message fields." },
+    { label: "What can you do?", prompt: "What can you do in this CMS?" },
+  ],
+  settings: [
+    { label: "Update site title", prompt: "Update the site title to " },
+    { label: "Update tagline", prompt: "Update the site tagline to " },
+  ],
+  default: [
+    { label: "New post", prompt: "Create a new draft blog post." },
+    { label: "New page", prompt: "Create a new draft page." },
+    { label: "New form", prompt: "Create a contact form with Name, Email, and Message." },
+    { label: "New post type", prompt: "Create a custom post type for " },
+    { label: "What can you do?", prompt: "What can you do in this CMS?" },
+  ],
+};
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -184,43 +231,40 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
 
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const pageType =
-    path.includes("/posts/") || path.includes("/pages/") || path.includes("/cpt/")
-      ? "post"
-      : path.includes("/dashboard")
-      ? "dashboard"
-      : "default";
+    path.includes("/posts/") || path.includes("/pages/") || path.includes("/cpt/") ? "post"
+    : path.includes("/dashboard") ? "dashboard"
+    : path.includes("/settings") ? "settings"
+    : "default";
 
   const quickPrompts = QUICK_PROMPTS[pageType] ?? QUICK_PROMPTS.default;
 
-  // Restore session on first mount + execute any pending actions
+  // Restore session + execute pending actions
   useEffect(() => {
     const session = loadSession();
     if (session) {
       if (session.messages?.length) setMessages(session.messages);
       if (session.open) setOpen(true);
 
-      // Execute pending actions once DOM + editor are ready
       if (session.pendingActions?.length) {
         const pending = session.pendingActions;
-        // Clear pending from storage immediately to avoid re-running
         saveSession(session.messages ?? [], session.open ?? false);
 
-        const hasContentAction = pending.some((a) => a.type === "setContent");
+        const hasContent = pending.some((a) => a.type === "setContent");
 
         const runPending = () => {
-          const appliedLabels: string[] = [];
+          const chips: ActionChip[] = [];
           for (const action of pending) {
-            const result = executeAction(action, () => {});
-            if (result) appliedLabels.push(result);
+            const label = executeClientAction(action, () => {});
+            if (label) chips.push({ label, ok: true });
           }
-          if (appliedLabels.length && session.messages?.length) {
+          if (chips.length && session.messages?.length) {
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
               if (last?.role === "assistant") {
                 updated[updated.length - 1] = {
                   ...last,
-                  appliedActions: [...(last.appliedActions ?? []), ...appliedLabels],
+                  appliedActions: [...(last.appliedActions ?? []), ...chips],
                 };
               }
               return updated;
@@ -228,27 +272,20 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           }
         };
 
-        if (hasContentAction) {
-          // Wait for BlockEditor to signal it's mounted before dispatching setContent
+        if (hasContent) {
           let fired = false;
           const onReady = () => {
             if (fired) return;
             fired = true;
             window.removeEventListener("ap:editorReady", onReady);
-            // Small tick to let React finish rendering the editor
             setTimeout(runPending, 100);
           };
           window.addEventListener("ap:editorReady", onReady);
-          // Fallback: if editor never fires (e.g. page has no block editor), run after 4s
           setTimeout(() => { if (!fired) { fired = true; window.removeEventListener("ap:editorReady", onReady); runPending(); } }, 4000);
         } else {
-          // No content action — just wait for #post-title to appear
           const tryApply = (attempts: number) => {
-            if (document.getElementById("post-title") || attempts >= 10) {
-              runPending();
-            } else {
-              setTimeout(() => tryApply(attempts + 1), 300);
-            }
+            if (document.getElementById("post-title") || attempts >= 10) runPending();
+            else setTimeout(() => tryApply(attempts + 1), 300);
           };
           setTimeout(() => tryApply(0), 300);
         }
@@ -257,13 +294,29 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     setResumed(true);
   }, []);
 
-  // Persist on every change (after initial restore)
+  // Persist on change
   useEffect(() => {
     if (!resumed) return;
-    saveSession(messages, open); // no pending — clears any leftover pending
+    saveSession(messages, open);
   }, [messages, open, resumed]);
 
-  // Navigate, keep session alive, and carry pending actions to next page
+  // Escape to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && open) setOpen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [open, messages]);
+
+  // Focus input
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 120);
+  }, [open]);
+
   const persistAndNavigate = useCallback((url: string, pending: Action[] = []) => {
     saveSession(messages, true, pending);
     setTimeout(() => { window.location.href = url; }, 300);
@@ -279,22 +332,6 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     if (excerptEl?.value) ctx.postExcerpt = excerptEl.value.slice(0, 200);
     return ctx;
   }, [path, pageContext]);
-
-  useEffect(() => {
-    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [open, messages]);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) setOpen(false);
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 120);
-  }, [open]);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -316,23 +353,18 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "Request failed");
 
-      // Auto-execute all action blocks immediately
-      const { content: replyContent, applied } = parseAndExecute(
-        data.reply,
-        newMessages,
-        persistAndNavigate
-      );
+      const { content: replyContent, chips } = await processResponse(data.reply, persistAndNavigate);
 
       setMessages([
         ...newMessages,
-        { role: "assistant", content: replyContent, appliedActions: applied },
+        { role: "assistant", content: replyContent, appliedActions: chips },
       ]);
     } catch (e: any) {
       const msg = e.message ?? "Something went wrong";
       setError(msg);
       setMessages([
         ...newMessages,
-        { role: "assistant", content: `Error: ${msg}` },
+        { role: "assistant", content: `Error: ${msg}`, appliedActions: [{ label: msg, ok: false }] },
       ]);
     } finally {
       setLoading(false);
@@ -349,8 +381,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           style={{
             position: "fixed", bottom: 24, right: 24, zIndex: 99998,
             width: 46, height: 46, borderRadius: "50%",
-            background: "#2271b1",
-            border: "none",
+            background: "#2271b1", border: "none",
             boxShadow: "0 2px 12px rgba(0,0,0,.28)",
             cursor: "pointer", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -363,8 +394,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
       {/* Slide-in panel */}
       <div style={{
         position: "fixed", right: 0, top: 32, bottom: 0, zIndex: 99997,
-        width: 380,
-        background: "#fff",
+        width: 380, background: "#fff",
         borderLeft: "1px solid #dcdcde",
         display: "flex", flexDirection: "column",
         boxShadow: "-4px 0 24px rgba(0,0,0,.1)",
@@ -385,10 +415,10 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           {messages.length > 0 && (
             <button
               onClick={() => {
-              setMessages([]);
-              setError("");
-              try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-            }}
+                setMessages([]);
+                setError("");
+                try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+              }}
               style={{
                 background: "none", border: "none", color: "rgba(255,255,255,.4)",
                 fontSize: 11, cursor: "pointer", padding: "2px 6px", fontFamily: "inherit",
@@ -400,7 +430,6 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           <a href="/admin/settings/ai" style={{ fontSize: 11, color: "rgba(255,255,255,.35)", textDecoration: "none" }}>
             Settings
           </a>
-          {/* Close button — inside header, no floating button overlap */}
           <button
             onClick={() => setOpen(false)}
             style={{
@@ -410,7 +439,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer", flexShrink: 0, marginLeft: 4,
             }}
-            title="Close"
+            title="Close (Esc)"
           >
             <CloseIcon />
           </button>
@@ -421,16 +450,14 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
 
         {/* Messages */}
         <div style={{
-          flex: 1, overflowY: "auto",
-          padding: 16,
+          flex: 1, overflowY: "auto", padding: 16,
           display: "flex", flexDirection: "column", gap: 12,
         }}>
           {messages.length === 0 && (
             <div>
               <p style={{ fontSize: 13, color: "#646970", margin: "0 0 14px", lineHeight: 1.6 }}>
-                Just tell me what you need — I'll do it automatically.
+                Tell me what you need — I'll handle it automatically.
               </p>
-
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {quickPrompts.map((p) => (
                   <button
@@ -451,14 +478,9 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           )}
 
           {messages.length > 0 && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              margin: "0 0 4px",
-            }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 4px" }}>
               <div style={{ flex: 1, height: 1, background: "#f0f0f1" }} />
-              <span style={{ fontSize: 10, color: "#c3c4c7", whiteSpace: "nowrap" }}>
-                {path}
-              </span>
+              <span style={{ fontSize: 10, color: "#c3c4c7", whiteSpace: "nowrap" }}>{path}</span>
               <div style={{ flex: 1, height: 1, background: "#f0f0f1" }} />
             </div>
           )}
@@ -492,18 +514,21 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
                     {msg.content}
                   </div>
                 )}
-                {/* Auto-applied action chips */}
                 {msg.appliedActions && msg.appliedActions.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                     {msg.appliedActions.map((a, ai) => (
                       <span key={ai} style={{
                         display: "inline-flex", alignItems: "center", gap: 4,
-                        background: "#d1e7dd", color: "#146c43",
+                        background: a.ok ? "#d1e7dd" : "#f8d7da",
+                        color: a.ok ? "#146c43" : "#842029",
                         borderRadius: 10, padding: "2px 8px",
                         fontSize: 11, fontWeight: 600,
                       }}>
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        {a}
+                        {a.ok
+                          ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        }
+                        {a.label}
                       </span>
                     ))}
                   </div>
@@ -538,9 +563,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               placeholder="Tell me what to do…"
               rows={2}
               style={{
@@ -583,7 +606,7 @@ function ProviderBadge() {
   useEffect(() => {
     fetch("/api/ai/settings")
       .then((r) => r.json())
-      .then((d) => { if (d.activeProvider) setProvider(d.activeProvider); })
+      .then((d) => { if (d.activeProvider && d.activeProvider !== "none") setProvider(d.activeProvider); })
       .catch(() => {});
   }, []);
 

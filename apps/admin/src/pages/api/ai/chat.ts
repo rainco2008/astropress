@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
 import { eq } from "drizzle-orm";
 import { wpOptions } from "@astropress/core/schema";
+// Register all built-in actions so the system prompt is complete
+import "../../../lib/ai-actions";
+import { getAllAIActions } from "../../../lib/ai-registry";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -32,10 +35,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   if (!row?.optionValue) {
     return new Response(
-      JSON.stringify({
-        error:
-          "No AI provider configured. Go to Settings → AI to add an API key.",
-      }),
+      JSON.stringify({ error: "No AI provider configured. Go to Settings → AI to add an API key." }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -46,9 +46,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   if (!cfg?.apiKey || cfg.enabled === false) {
     return new Response(
-      JSON.stringify({
-        error: `Provider "${provider}" is not configured or is disabled. Visit Settings → AI.`,
-      }),
+      JSON.stringify({ error: `Provider "${provider}" is not configured or is disabled. Visit Settings → AI.` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -59,40 +57,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
     let reply: string;
 
     if (provider === "anthropic") {
-      reply = await callAnthropic(
-        cfg.apiKey,
-        cfg.defaultModel ?? "claude-sonnet-4-6",
-        system,
-        messages
-      );
+      reply = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", system, messages);
     } else if (provider === "openai") {
-      reply = await callOpenAI(
-        cfg.apiKey,
-        cfg.defaultModel ?? "gpt-4o",
-        system,
-        messages
-      );
+      reply = await callOpenAI(cfg.apiKey, cfg.defaultModel ?? "gpt-4o", system, messages);
     } else if (provider === "gemini") {
-      reply = await callGemini(
-        cfg.apiKey,
-        cfg.defaultModel ?? "gemini-flash-latest",
-        system,
-        messages
-      );
+      reply = await callGemini(cfg.apiKey, cfg.defaultModel ?? "gemini-flash-latest", system, messages);
     } else if (provider === "mistral") {
-      reply = await callMistral(
-        cfg.apiKey,
-        cfg.defaultModel ?? "mistral-large-latest",
-        system,
-        messages
-      );
+      reply = await callMistral(cfg.apiKey, cfg.defaultModel ?? "mistral-large-latest", system, messages);
     } else if (provider === "groq") {
-      reply = await callGroq(
-        cfg.apiKey,
-        cfg.defaultModel ?? "llama-3.3-70b-versatile",
-        system,
-        messages
-      );
+      reply = await callGroq(cfg.apiKey, cfg.defaultModel ?? "llama-3.3-70b-versatile", system, messages);
     } else {
       return new Response(
         JSON.stringify({ error: `Unknown provider: ${provider}` }),
@@ -116,71 +89,91 @@ export const POST: APIRoute = async ({ locals, request }) => {
 function buildSystemPrompt(context: Record<string, any>): string {
   const contextStr = Object.entries(context)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k}: ${v}`)
+    .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
     .join("\n");
 
-  return `You are AstroPress AI — an autonomous CMS assistant. You take action directly; you never give step-by-step instructions for the user to follow themselves.
+  const actions = getAllAIActions();
+  const serverActions = actions.filter((a) => a.serverSide);
+  const clientActions = actions.filter((a) => !a.serverSide);
 
-Current page context:
+  const serverActionDocs = serverActions
+    .map((a) => `- **${a.type}**: ${a.description}\n  Example: \`${a.example}\``)
+    .join("\n");
+
+  const clientActionDocs = clientActions
+    .map((a) => `- **${a.type}**: ${a.description}\n  Example: \`${a.example}\``)
+    .join("\n");
+
+  return `You are AstroPress AI — a fully autonomous CMS assistant with complete control over this WordPress-compatible CMS. You act immediately; you never give instructions for the user to follow themselves.
+
+## Current Page Context
 ${contextStr || "(none)"}
 
-AUTONOMOUS BEHAVIOUR RULES:
-1. When the user asks you to do something, DO IT — emit the action block(s) immediately.
-2. Never say "you can", "you should", "click", "go to", "navigate to", "follow these steps", or give manual instructions.
-3. Keep replies short: one sentence confirming what you did, nothing more.
-4. If you need to write content, write the full content — not a description of what you will write.
-5. For any task that requires multiple actions (e.g. set title + set content + set excerpt), emit ALL action blocks in one response.
+## Behaviour Rules
+1. When the user asks you to do something, DO IT — emit the correct action block(s) immediately.
+2. Never say "you can", "you should", "click", "go to", "navigate to", or give manual instructions.
+3. Keep your reply to one sentence confirming what you did.
+4. For multi-step tasks emit ALL action blocks in one response.
+5. Write complete, high-quality content — never placeholders.
+6. Use **server-side actions** for create/update/delete operations — they work from any page.
+7. Use **client-side actions** only when already on the relevant editor page.
+8. After a server-side action that creates something, do NOT also emit a navigate action — the server handles redirection automatically.
 
-ACTIONS — emit at the END of your response, one per block:
+## Server-Side Actions
+These execute via the API and work from any page:
+${serverActionDocs}
+
+## Client-Side Actions
+These manipulate the current editor page DOM directly:
+${clientActionDocs}
+
+## Action Block Format
+Emit one JSON action per fenced block at the END of your response:
 
 \`\`\`action
-{"type":"setTitle","value":"Exact Title Here"}
+{"type":"createPost","postType":"page","title":"Pricing","content":"<h2>Plans</h2><p>...</p>","status":"draft"}
 \`\`\`
 
 \`\`\`action
-{"type":"setExcerpt","value":"One or two sentence excerpt."}
+{"type":"setTitle","value":"Updated Title"}
 \`\`\`
 
-\`\`\`action
-{"type":"setContent","html":"<p>Full HTML content...</p>"}
-\`\`\`
-
-\`\`\`action
-{"type":"setStatus","value":"publish"}
-\`\`\`
-
-\`\`\`action
-{"type":"savePost","status":"draft"}
-\`\`\`
-
-\`\`\`action
-{"type":"navigate","url":"/admin/posts/new"}
-\`\`\`
-
-CONTENT FORMAT:
-- Post content: clean semantic HTML (<h2>, <p>, <ul>, <strong> etc.)
+## Content Format
+- Post content: clean semantic HTML (<h2>, <p>, <ul>, <strong>, <blockquote>)
 - Titles: plain text, no HTML
 - Excerpts: plain text, 1–2 sentences
+- Form fields types: text, email, textarea, select, checkbox, number, tel, url
 
-EXAMPLES:
-User: "write a post about coffee"
-→ Reply: "Created a draft post about coffee." + setTitle + setContent + setExcerpt blocks
+## Examples
 
-User: "make the title catchier"
-→ Reply: "Updated the title." + setTitle block
+User: "create a pricing page with 3 tiers"
+→ "Created a draft pricing page with Starter, Pro, and Enterprise plans."
+→ \`\`\`action\n{"type":"createPost","postType":"page","title":"Pricing","content":"<h2>Pricing Plans</h2>...","status":"draft"}\n\`\`\`
 
-User: "publish this"
-→ Reply: "Published." + setStatus("publish") + savePost("publish") blocks`;
+User: "create a contact form"
+→ "Created a contact form with Name, Email, and Message fields."
+→ \`\`\`action\n{"type":"createForm","name":"Contact Us","fields":[{"label":"Name","type":"text","required":true},{"label":"Email","type":"email","required":true},{"label":"Message","type":"textarea","required":true}]}\n\`\`\`
+
+User: "change the site title to Acme Corp"
+→ "Updated site title to Acme Corp."
+→ \`\`\`action\n{"type":"updateSettings","settings":{"blogname":"Acme Corp"}}\n\`\`\`
+
+User: "create a products post type"
+→ "Created the Products custom post type."
+→ \`\`\`action\n{"type":"createPostType","name":"Products","key":"product","singular":"Product","icon":"tag"}\n\`\`\`
+
+User: "write the intro for this post" (on editor page)
+→ "Written an engaging introduction."
+→ \`\`\`action\n{"type":"setContent","html":"<p>...</p>"}\n\`\`\`
+
+User: "publish this post" (on editor page)
+→ "Published."
+→ \`\`\`action\n{"type":"setStatus","value":"publish"}\n\`\`\`\`\`\`action\n{"type":"savePost","status":"publish"}\n\`\`\``;
 }
 
-// ─── Provider implementations ──────────────────────────────────────────────────
+// ─── Provider implementations ─────────────────────────────────────────────────
 
-async function callAnthropic(
-  apiKey: string,
-  model: string,
-  system: string,
-  messages: ChatMessage[]
-): Promise<string> {
+async function callAnthropic(apiKey: string, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -190,33 +183,20 @@ async function callAnthropic(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 2048,
+      max_tokens: 4096,
       system,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     }),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
-  }
-
+  if (!res.ok) { const t = await res.text(); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json() as any;
   return data.content[0].text as string;
 }
 
-async function callOpenAI(
-  apiKey: string,
-  model: string,
-  system: string,
-  messages: ChatMessage[]
-): Promise<string> {
+async function callOpenAI(apiKey: string, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
@@ -225,27 +205,16 @@ async function callOpenAI(
       ],
     }),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`);
-  }
-
+  if (!res.ok) { const t = await res.text(); throw new Error(`OpenAI ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json() as any;
   return data.choices[0].message.content as string;
 }
 
-async function callGemini(
-  apiKey: string,
-  model: string,
-  system: string,
-  messages: ChatMessage[]
-): Promise<string> {
+async function callGemini(apiKey: string, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
@@ -254,32 +223,19 @@ async function callGemini(
       body: JSON.stringify({
         system_instruction: { parts: [{ text: system }] },
         contents,
-        generationConfig: { maxOutputTokens: 2048 },
+        generationConfig: { maxOutputTokens: 4096 },
       }),
     }
   );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Gemini ${res.status}: ${text.slice(0, 200)}`);
-  }
-
+  if (!res.ok) { const t = await res.text(); throw new Error(`Gemini ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json() as any;
   return data.candidates[0].content.parts[0].text as string;
 }
 
-async function callMistral(
-  apiKey: string,
-  model: string,
-  system: string,
-  messages: ChatMessage[]
-): Promise<string> {
+async function callMistral(apiKey: string, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
@@ -288,28 +244,15 @@ async function callMistral(
       ],
     }),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Mistral ${res.status}: ${text.slice(0, 200)}`);
-  }
-
+  if (!res.ok) { const t = await res.text(); throw new Error(`Mistral ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json() as any;
   return data.choices[0].message.content as string;
 }
 
-async function callGroq(
-  apiKey: string,
-  model: string,
-  system: string,
-  messages: ChatMessage[]
-): Promise<string> {
+async function callGroq(apiKey: string, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
@@ -318,12 +261,7 @@ async function callGroq(
       ],
     }),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Groq ${res.status}: ${text.slice(0, 200)}`);
-  }
-
+  if (!res.ok) { const t = await res.text(); throw new Error(`Groq ${res.status}: ${t.slice(0, 200)}`); }
   const data = await res.json() as any;
   return data.choices[0].message.content as string;
 }
