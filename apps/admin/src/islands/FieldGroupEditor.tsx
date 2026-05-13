@@ -1367,8 +1367,24 @@ function FieldRow({ field, expanded, onToggle, onUpdate, onDelete, onMove, isFir
 
 // ─── Location Tab ─────────────────────────────────────────────────────────────
 
-function LocationTab({ group, setGroup }: { group: FieldGroup; setGroup: (g: FieldGroup) => void }) {
+function LocationTab({
+  group,
+  setGroup,
+  postTypeOptions,
+  taxonomyOptions,
+}: {
+  group: FieldGroup;
+  setGroup: (g: FieldGroup) => void;
+  postTypeOptions: { value: string; label: string }[];
+  taxonomyOptions: { value: string; label: string }[];
+}) {
   const setLocation = (loc: FieldGroupLocation[][]) => setGroup({ ...group, location: loc });
+
+  const getParamValues = (param: string) => {
+    if (param === "post_type") return postTypeOptions;
+    if (param === "taxonomy") return taxonomyOptions;
+    return LOCATION_PARAM_VALUES[param] ?? [];
+  };
 
   const addRuleGroup = () => setLocation([...group.location, [{ param: "post_type", operator: "==", value: "post" }]]);
 
@@ -1406,10 +1422,10 @@ function LocationTab({ group, setGroup }: { group: FieldGroup; setGroup: (g: Fie
                 <option value="==">== is equal to</option>
                 <option value="!=">!= is not equal to</option>
               </select>
-              {LOCATION_PARAM_VALUES[rule.param] ? (
+              {getParamValues(rule.param).length > 0 ? (
                 <select style={S.select} value={rule.value} onChange={(e) => updateRule(gi, ri, { value: e.target.value })}>
                   <option value="">Select...</option>
-                  {LOCATION_PARAM_VALUES[rule.param].map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                  {getParamValues(rule.param).map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
                 </select>
               ) : (
                 <input style={S.input} value={rule.value} onChange={(e) => updateRule(gi, ri, { value: e.target.value })} placeholder="value" />
@@ -1521,6 +1537,15 @@ export default function FieldGroupEditor({ groupId }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const [postTypeOptions, setPostTypeOptions] = useState<{ value: string; label: string }[]>([
+    { value: "post", label: "Post" },
+    { value: "page", label: "Page" },
+    { value: "attachment", label: "Media" },
+  ]);
+  const [taxonomyOptions, setTaxonomyOptions] = useState<{ value: string; label: string }[]>([
+    { value: "category", label: "Category" },
+    { value: "post_tag", label: "Tag" },
+  ]);
 
   useEffect(() => {
     if (groupId) {
@@ -1531,6 +1556,35 @@ export default function FieldGroupEditor({ groupId }: Props) {
     } else {
       setGroup(createGroup());
     }
+
+    // Load custom post types
+    fetch("/api/post-types")
+      .then(r => r.ok ? r.json() : [])
+      .then((types: any[]) => {
+        if (types.length > 0) {
+          setPostTypeOptions([
+            { value: "post", label: "Post" },
+            { value: "page", label: "Page" },
+            { value: "attachment", label: "Media" },
+            ...types.map((t: any) => ({ value: t.key, label: t.config?.pluralLabel ?? t.key })),
+          ]);
+        }
+      })
+      .catch(() => {});
+
+    // Load custom taxonomies
+    fetch("/api/taxonomies")
+      .then(r => r.ok ? r.json() : [])
+      .then((taxs: any[]) => {
+        if (taxs.length > 0) {
+          setTaxonomyOptions([
+            { value: "category", label: "Category" },
+            { value: "post_tag", label: "Tag" },
+            ...taxs.map((t: any) => ({ value: t.key, label: t.pluralLabel ?? t.label ?? t.key })),
+          ]);
+        }
+      })
+      .catch(() => {});
   }, [groupId]);
 
   const save = async () => {
@@ -1672,7 +1726,7 @@ export default function FieldGroupEditor({ groupId }: Props) {
       )}
 
       {/* Location tab */}
-      {activeTab === "location" && <LocationTab group={group} setGroup={setGroup} />}
+      {activeTab === "location" && <LocationTab group={group} setGroup={setGroup} postTypeOptions={postTypeOptions} taxonomyOptions={taxonomyOptions} />}
 
       {/* Settings tab */}
       {activeTab === "settings" && <SettingsTab group={group} setGroup={setGroup} />}

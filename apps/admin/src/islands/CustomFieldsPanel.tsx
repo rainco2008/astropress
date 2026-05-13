@@ -31,9 +31,18 @@ interface Props {
 
 // ─── Parse choices string to array ───────────────────────────────────────────
 
-function parseChoices(raw: string): { value: string; label: string }[] {
+function parseChoices(raw: any): { value: string; label: string }[] {
   if (!raw) return [];
-  return raw.split("\n").map(line => {
+  // Object format from AI action: { key: "Label", ... }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return Object.entries(raw).map(([value, label]) => ({ value, label: String(label) }));
+  }
+  // Array format: ["Label", ...]
+  if (Array.isArray(raw)) {
+    return raw.map(item => ({ value: String(item).toLowerCase().replace(/\s+/g, "_"), label: String(item) }));
+  }
+  // String format from FieldGroupEditor: "key : Label\nkey2 : Label2"
+  return String(raw).split("\n").map(line => {
     const [v, ...rest] = line.split(":");
     const value = v.trim();
     const label = rest.length ? rest.join(":").trim() : value;
@@ -514,10 +523,11 @@ export default function CustomFieldsPanel({ postId, postType }: Props) {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/custom-fields").then(r => r.json()),
-      fetch(`/api/custom-fields/values?postId=${postId}`).then(r => r.json()),
+      fetch("/api/custom-fields").then(r => r.ok ? r.json() : []),
+      fetch(`/api/custom-fields/values?postId=${postId}`).then(r => r.ok ? r.json() : {}),
     ]).then(([allGroups, vals]) => {
       const applicable = (allGroups as FieldGroup[]).filter(g => {
+        if (g.active === false) return false;
         if (!g.location || g.location.length === 0) return false;
         return (g as any).location.some((andGroup: any[]) =>
           andGroup.every((rule: any) => {
@@ -531,7 +541,7 @@ export default function CustomFieldsPanel({ postId, postType }: Props) {
       setGroups(applicable);
       setValues(vals as Record<string, string>);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [postId, postType]);
 
   const save = async () => {

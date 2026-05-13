@@ -2,6 +2,7 @@
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { getPost } from "../../../lib/posts";
 import BlockEditor from "../../../islands/BlockEditor";
+import CustomFieldsPanel from "../../../islands/CustomFieldsPanel";
 
 const db = Astro.locals.db;
 const user = Astro.locals.user;
@@ -44,6 +45,9 @@ if (!post) return Astro.redirect("/admin/pages");
           onChange={(content: string) => { (window as any).__editorContent = content; }}
           postId={id}
         />
+      </div>
+      <div style="margin-top:16px">
+        <CustomFieldsPanel client:only="react" postId={id} postType="page" />
       </div>
     </div>
 

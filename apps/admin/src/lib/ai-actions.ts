@@ -333,6 +333,140 @@ registerAIAction({
   },
 });
 
+// ─── Custom Fields ────────────────────────────────────────────────────────────
+
+registerAIAction({
+  type: "createFieldGroup",
+  description: "Create an ACF-style custom field group and attach it to a post type or page. Supported field types: text, textarea, number, email, url, image, file, select, checkbox, radio, true_false, date_picker, wysiwyg, color_picker, range, password, repeater.",
+  example: '{"type":"createFieldGroup","title":"Book Details","postTypes":["book"],"fields":[{"label":"ISBN","name":"isbn","type":"text"},{"label":"Price","name":"price","type":"number"},{"label":"Cover Image","name":"cover_image","type":"image"},{"label":"Genre","name":"genre","type":"select","choices":["Fiction","Non-Fiction","Science","History"]}]}',
+  serverSide: true,
+  handler: async (params, db) => {
+    if (!params.title || !Array.isArray(params.fields)) {
+      return { success: false, message: "title and fields are required" };
+    }
+
+    const row = await db
+      .select()
+      .from(wpOptions)
+      .where(eq(wpOptions.optionName, "astropress_field_groups"))
+      .get();
+
+    const groups: any[] = row?.optionValue ? JSON.parse(row.optionValue) : [];
+
+    const id = `group_${Date.now()}`;
+    const key = `group_${Math.random().toString(36).slice(2, 10)}`;
+
+    // Normalise postTypes → location rules (ACF format)
+    const postTypes: string[] = Array.isArray(params.postTypes) ? params.postTypes : ["post"];
+    const location: any[][] = postTypes.map((pt) => ([{
+      param: "post_type",
+      operator: "==",
+      value: pt,
+    }]));
+
+    const fields = (params.fields as any[]).map((f, i) => {
+      const fieldKey = `field_${Date.now()}_${i}`;
+      const base: any = {
+        id: fieldKey,
+        key: fieldKey,
+        label: f.label ?? `Field ${i + 1}`,
+        name: f.name ?? (f.label ?? `field_${i}`).toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+        type: f.type ?? "text",
+        instructions: f.instructions ?? "",
+        required: f.required ?? false,
+        conditionalLogic: false,
+        wrapper: { width: "", class: "", id: "" },
+      };
+
+      // Type-specific extra fields
+      if (f.type === "select" || f.type === "checkbox" || f.type === "radio" || f.type === "button_group") {
+        const rawChoices: string[] = Array.isArray(f.choices) ? f.choices : [];
+        // Store as newline-delimited "key : Label" string (same format as FieldGroupEditor)
+        base.choices = rawChoices.map((c: string) => `${c.toLowerCase().replace(/\s+/g, "_")} : ${c}`).join("\n");
+        base.allowNull = f.allowNull ?? 0;
+        base.multiple = f.multiple ?? 0;
+        base.ui = f.ui ?? 0;
+        base.returnFormat = f.returnFormat ?? "value";
+      }
+      if (f.type === "true_false") {
+        base.message = f.message ?? "";
+        base.defaultValue = f.defaultValue ?? 0;
+        base.ui = f.ui ?? 1;
+      }
+      if (f.type === "number" || f.type === "range") {
+        base.min = f.min ?? "";
+        base.max = f.max ?? "";
+        base.step = f.step ?? "";
+      }
+      if (f.type === "image" || f.type === "file") {
+        base.returnFormat = f.returnFormat ?? "array";
+        base.previewSize = "medium";
+        base.library = "all";
+      }
+      if (f.type === "text" || f.type === "textarea") {
+        base.placeholder = f.placeholder ?? "";
+        base.maxlength = f.maxlength ?? "";
+        if (f.type === "textarea") base.rows = f.rows ?? "";
+      }
+      if (f.type === "repeater") {
+        base.subFields = (f.subFields ?? []).map((sf: any, si: number) => ({
+          id: `field_${Date.now()}_${i}_${si}`,
+          key: `field_${Date.now()}_${i}_${si}`,
+          label: sf.label ?? `Sub Field ${si + 1}`,
+          name: (sf.label ?? `sub_field_${si}`).toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+          type: sf.type ?? "text",
+          instructions: "",
+          required: sf.required ?? false,
+          conditionalLogic: false,
+          wrapper: { width: "", class: "", id: "" },
+        }));
+        base.minRows = f.minRows ?? "";
+        base.maxRows = f.maxRows ?? "";
+        base.layout = f.layout ?? "table";
+        base.buttonLabel = f.buttonLabel ?? "Add Row";
+      }
+
+      return base;
+    });
+
+    const newGroup: any = {
+      id,
+      key,
+      title: params.title,
+      fields,
+      location,
+      menuOrder: groups.length,
+      position: params.position ?? "normal",
+      labelPlacement: "top",
+      instructionPlacement: "label",
+      hideOnScreen: [],
+      active: true,
+    };
+
+    groups.push(newGroup);
+
+    await db
+      .insert(wpOptions)
+      .values({ optionName: "astropress_field_groups", optionValue: JSON.stringify(groups) })
+      .onConflictDoUpdate({
+        target: wpOptions.optionName,
+        set: { optionValue: JSON.stringify(groups) },
+      });
+
+    try {
+      const { registerFieldGroup } = await import("@astropress/core/registry");
+      registerFieldGroup(newGroup);
+    } catch {}
+
+    return {
+      success: true,
+      message: `Created field group "${params.title}" with ${fields.length} field${fields.length !== 1 ? "s" : ""}`,
+      navigate: `/admin/custom-fields/${id}`,
+      data: { id, key },
+    };
+  },
+});
+
 // ─── Client-side actions (DOM — documented for system prompt only) ─────────────
 
 registerAIAction({
