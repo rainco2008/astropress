@@ -21,10 +21,10 @@ const statusOptions = [
 ];
 ---
 <AdminLayout title="Posts">
-  <div class="wp-heading">
-    <h1>Posts</h1>
-    <a href="/admin/posts/new" class="button-primary button-small">+ New Post</a>
-  </div>
+
+  <h1 class="wp-heading-inline">Posts</h1>
+  <a href="/admin/posts/new" class="page-title-action">Add New</a>
+  <hr class="wp-header-end" />
 
   <ul class="subsubsub">
     {statusOptions.map((s) => (
@@ -40,45 +40,54 @@ const statusOptions = [
   </ul>
 
   {posts.length === 0 ? (
-    <div class="postbox">
-      <div class="postbox-inside" style="padding:40px;text-align:center;color:var(--wp-gray-500)">
-        No posts found.{" "}
-        <a href="/admin/posts/new" class="button-link">Create your first post →</a>
-      </div>
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No Posts Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        {status ? `No posts with status "${status}".` : "Create your first post to get started."}
+      </p>
+      <a href="/admin/posts/new" class="button button-primary">Add Your First Post</a>
     </div>
   ) : (
-    <table class="wp-list-table">
+    <table class="wp-list-table widefat fixed striped">
       <thead>
         <tr>
-          <th style="width:50%">Title</th>
-          <th>Status</th>
-          <th>Date</th>
+          <th scope="col" class="manage-column column-primary">Title</th>
+          <th scope="col" class="manage-column" style="width:100px">Status</th>
+          <th scope="col" class="manage-column" style="width:120px">Date</th>
         </tr>
       </thead>
       <tbody>
         {posts.map((post) => (
           <tr>
-            <td class="column-title">
-              <a href={`/admin/posts/${post.id}`} style="color:var(--wp-gray-900);text-decoration:none">
-                {post.title || <em style="color:var(--wp-gray-500);font-weight:400">Untitled</em>}
-              </a>
+            <td class="title column-title has-row-actions column-primary">
+              <strong>
+                <a href={`/admin/posts/${post.id}`} class="row-title">
+                  {post.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
+                </a>
+              </strong>
               <div class="row-actions">
-                <span><a href={`/admin/posts/${post.id}`}>Edit</a></span>
-                <span class="delete">
-                  <a
+                <span class="edit"><a href={`/admin/posts/${post.id}`}>Edit</a></span> |
+                <span class="trash">
+                  <button
                     onclick={`if(confirm('Move to trash?'))fetch('/api/posts/${post.id}',{method:'DELETE'}).then(()=>location.reload())`}
-                    style="cursor:pointer"
-                  >Trash</a>
+                    class="ap-row-delete-btn"
+                  >Trash</button>
                 </span>
               </div>
             </td>
             <td>
-              <span class={`status-badge status-${post.status}`}>
-                {post.status === "publish" ? "Published"
-                  : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+              <span style={`display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : post.status === "trash" ? "#f8d7da" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : post.status === "trash" ? "#842029" : "#997404"}`}>
+                {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
               </span>
             </td>
-            <td style="color:var(--wp-gray-500);font-size:12px;white-space:nowrap">
+            <td style="color:var(--wp-gray-600);font-size:12px">
               {post.date.slice(0, 10)}
             </td>
           </tr>
@@ -88,15 +97,20 @@ const statusOptions = [
   )}
 
   {totalPages > 1 && (
-    <div style="display:flex;gap:4px;margin-top:16px">
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-        <a
-          href={`/admin/posts?page=${p}${status ? `&status=${status}` : ""}`}
-          class={p === page ? "button-primary button-small" : "button button-small"}
-        >
-          {p}
-        </a>
-      ))}
+    <div class="tablenav bottom">
+      <div class="tablenav-pages">
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <a
+            href={`/admin/posts?page=${p}${status ? `&status=${status}` : ""}`}
+            class={p === page ? "button button-disabled" : "button"}
+            style={p === page ? "font-weight:700" : ""}
+          >
+            {p}
+          </a>
+        ))}
+      </div>
     </div>
   )}
+
 </AdminLayout>
+

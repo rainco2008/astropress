@@ -12,7 +12,7 @@ const editingTax = editing ? customTaxonomies.find(t => t.slug === editing) : nu
 ---
 
 <AdminLayout title="Taxonomies">
-  <div style="display:grid;grid-template-columns:280px 1fr;gap:0;min-height:calc(100vh - 100px);margin:-28px -32px">
+  <div style="display:grid;grid-template-columns:280px 1fr;gap:0;min-height:calc(100vh - 32px);margin:-20px -20px -40px">
 
     <!-- Left: list -->
     <div style="background:#fff;border-right:1px solid #dcdcde;display:flex;flex-direction:column">
@@ -34,7 +34,9 @@ const editingTax = editing ? customTaxonomies.find(t => t.slug === editing) : nu
             href={`?edit=${tax.slug}`}
             style={`display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f0f1;text-decoration:none;transition:background 0.1s;${editing === tax.slug ? "background:#f0f6fc;border-left:3px solid #2271b1;" : "border-left:3px solid transparent;"}`}
           >
-            <span style="font-size:20px;width:28px;text-align:center">🏷️</span>
+            <span style={`width:28px;text-align:center;color:${editing === tax.slug ? "#2271b1" : "#646970"};display:flex;align-items:center;justify-content:center`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </span>
             <div style="min-width:0">
               <div style="font-size:13px;font-weight:600;color:#1d2327">{tax.config.pluralLabel}</div>
               <div style="font-size:11px;color:#646970;font-family:monospace">{tax.slug}</div>
@@ -52,7 +54,9 @@ const editingTax = editing ? customTaxonomies.find(t => t.slug === editing) : nu
 
       {!isNew && !editingTax && (
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#646970;text-align:center">
-          <div style="font-size:48px;margin-bottom:16px">🏷️</div>
+          <div style="margin-bottom:16px;opacity:0.3;color:#1d2327">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        </div>
           <h2 style="font-size:16px;font-weight:600;margin:0 0 8px;color:#1d2327">Manage Taxonomies</h2>
           <p style="font-size:13px;margin:0 0 16px">Create custom taxonomies to categorise your content.</p>
           <a href="?new=1" style="background:#2271b1;color:#fff;padding:8px 18px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">Add Taxonomy</a>

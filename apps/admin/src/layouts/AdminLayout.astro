@@ -231,6 +231,23 @@ const icons = adminIcons;
       .subsubsub a:hover { text-decoration: underline; }
       .subsubsub .current { color: var(--wp-gray-900); font-weight: 600; }
 
+      /* ─── Page heading ───────────────────────────────────────────────── */
+      .wp-heading-inline { display: inline-block; margin: 0 5px 0 0; font-size: 23px; font-weight: 400; line-height: 1.3; color: var(--wp-gray-900); }
+      .page-title-action { display: inline-block; padding: 4px 10px; border: 1px solid var(--wp-gray-400); border-radius: 2px; font-size: 13px; color: var(--wp-gray-700); text-decoration: none; background: var(--wp-white); cursor: pointer; font-family: inherit; font-weight: normal; line-height: 1.6; }
+      .page-title-action:hover { background: var(--wp-gray-100); border-color: var(--wp-gray-700); color: var(--wp-gray-900); }
+      hr.wp-header-end { border: none; border-top: 1px solid var(--wp-gray-200); margin: 8px 0 16px; }
+
+      /* ─── Tablenav / pagination ───────────────────────────────────────── */
+      .tablenav { display: flex; align-items: center; justify-content: flex-end; margin: 8px 0; }
+      .tablenav-pages { display: flex; gap: 4px; }
+
+      /* ─── Empty state ─────────────────────────────────────────────────── */
+      .ap-empty-state { background: var(--wp-white); border: 1px solid var(--wp-gray-300); padding: 48px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; max-width: 480px; margin-top: 20px; }
+
+      /* ─── Row delete button ───────────────────────────────────────────── */
+      .ap-row-delete-btn { background: none; border: none; padding: 0; color: #d63638; cursor: pointer; font-size: 13px; font-family: inherit; }
+      .ap-row-delete-btn:hover { color: #a02222; text-decoration: underline; }
+
       /* ─── Notice ──────────────────────────────────────────────────────── */
       .notice { background: var(--wp-white); border: 1px solid var(--wp-gray-300); border-left: 4px solid var(--wp-blue); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
       .notice-success { border-left-color: var(--wp-green); }

@@ -22,9 +22,20 @@ if (!post) return Astro.redirect("/admin/pages");
         style="width:100%;font-size:28px;font-weight:700;border:none;border-bottom:2px solid #dcdcde;padding:8px 0;margin-bottom:20px;outline:none;background:transparent"
         oninput="updateSlug(this.value)"
       />
-      <div style="font-size:12px;color:#646970;margin-bottom:16px">
-        Permalink: <span id="permalink-display">/{post.slug || "..."}</span>
-        <input id="post-slug" type="hidden" value={post.slug} />
+      <div id="permalink-row" style="font-size:12px;color:#646970;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+        <span>Permalink:</span>
+        <span id="permalink-view" style="display:inline-flex;align-items:center;gap:4px">
+          <a id="permalink-link" href={post.slug ? `/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `/${post.slug}` : "—"}</a>
+          <button onclick="startEditSlug()" style="font-size:11px;color:#2271b1;background:none;border:none;padding:0 2px;cursor:pointer;font-family:inherit;text-decoration:underline">Edit</button>
+        </span>
+        <span id="permalink-edit" style="display:none;align-items:center;gap:4px">
+          <input id="post-slug" type="text" value={post.slug}
+            style="font-size:12px;padding:2px 6px;border:1px solid #8c8f94;border-radius:2px;outline:none;width:200px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')confirmSlug();if(event.key==='Escape')cancelEditSlug()"
+          />
+          <button onclick="confirmSlug()" style="font-size:11px;padding:2px 8px;background:#2271b1;color:#fff;border:none;border-radius:2px;cursor:pointer">OK</button>
+          <button onclick="cancelEditSlug()" style="font-size:11px;padding:2px 8px;background:none;border:1px solid #dcdcde;border-radius:2px;cursor:pointer;color:#646970">Cancel</button>
+        </span>
       </div>
       <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;min-height:480px">
         <BlockEditor
@@ -56,24 +67,65 @@ if (!post) return Astro.redirect("/admin/pages");
 
   <script define:vars={{ postId: id, initialSlug: post.slug }}>
     let currentSlug = initialSlug;
+    let slugLocked = false;
+
     function slugify(s) { return s.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_]+/g,"-").replace(/^-+|-+$/g,""); }
-    function updateSlug(t) {
-      currentSlug = slugify(t);
-      document.getElementById("permalink-display").textContent = "/" + (currentSlug || "...");
-      document.getElementById("post-slug").value = currentSlug;
+
+    function setPermalinkDisplay(slug) {
+      const link = document.getElementById("permalink-link");
+      if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
+      const input = document.getElementById("post-slug");
+      if (input) input.value = slug;
+      currentSlug = slug;
     }
+
+    function updateSlug(t) {
+      if (slugLocked) return;
+      const preview = slugify(t);
+      const link = document.getElementById("permalink-link");
+      if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
+    }
+
+    function startEditSlug() {
+      const input = document.getElementById("post-slug");
+      if (!input.value) input.value = slugify(document.getElementById("post-title").value);
+      document.getElementById("permalink-view").style.display = "none";
+      document.getElementById("permalink-edit").style.display = "inline-flex";
+      input.focus(); input.select();
+    }
+
+    function confirmSlug() {
+      const raw = document.getElementById("post-slug").value.trim();
+      const newSlug = raw ? slugify(raw) || raw.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
+      slugLocked = !!newSlug;
+      setPermalinkDisplay(newSlug);
+      document.getElementById("permalink-edit").style.display = "none";
+      document.getElementById("permalink-view").style.display = "inline-flex";
+    }
+
+    function cancelEditSlug() {
+      document.getElementById("post-slug").value = currentSlug;
+      document.getElementById("permalink-edit").style.display = "none";
+      document.getElementById("permalink-view").style.display = "inline-flex";
+    }
+
     async function savePost(forceStatus) {
       const title = document.getElementById("post-title").value;
       const status = forceStatus || document.getElementById("post-status").value;
-      const slug = document.getElementById("post-slug").value || slugify(title);
+      const slug = document.getElementById("post-slug").value.trim() || slugify(title);
       const content = window.__editorContent ?? "";
       document.getElementById("save-status").textContent = "Saving…";
       const res = await fetch(`/api/posts/${postId}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, status, slug }),
       });
-      document.getElementById("save-status").textContent = res.ok ? "Saved ✓" : "Error";
-      if (res.ok) setTimeout(() => document.getElementById("save-status").textContent = "", 3000);
+      if (res.ok) {
+        if (!slugLocked) setPermalinkDisplay(slug);
+        document.getElementById("save-status").textContent = "Saved ✓";
+        setTimeout(() => document.getElementById("save-status").textContent = "", 3000);
+      } else {
+        document.getElementById("save-status").textContent = "Error";
+      }
     }
   </script>
 </AdminLayout>

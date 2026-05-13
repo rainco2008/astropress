@@ -2,9 +2,10 @@
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import { getPost } from "../../../../lib/posts";
 import BlockEditor from "../../../../islands/BlockEditor";
-import { getSidebarPanels, getPostType } from "@astropress/core/registry";
+import { getSidebarPanels, getPostType, getTaxonomies } from "@astropress/core/registry";
 import SeoPanel from "../../../../islands/SeoPanel";
 import CustomFieldsPanel from "../../../../islands/CustomFieldsPanel";
+import TaxonomyPanel from "../../../../islands/TaxonomyPanel";
 
 const db = Astro.locals.db;
 const user = Astro.locals.user;
@@ -21,6 +22,7 @@ if (!post) return Astro.redirect(`/admin/cpt/${type}`);
 
 const panels = getSidebarPanels(type);
 const backUrl = `/admin/cpt/${type}`;
+const postTaxonomies = getTaxonomies().filter((t) => t.config.postTypes?.includes(type));
 ---
 <AdminLayout title={post.title || `Edit ${postTypeConfig.label}`}>
   <div id="editor-root"
@@ -39,9 +41,20 @@ const backUrl = `/admin/cpt/${type}`;
         style="width:100%;font-size:28px;font-weight:700;border:none;border-bottom:2px solid #dcdcde;padding:8px 0;margin-bottom:20px;outline:none;background:transparent;color:#1d2327"
         oninput="updateSlug(this.value)"
       />
-      <div style="font-size:12px;color:#646970;margin-bottom:16px">
-        Permalink: <span id="permalink-display" style="color:#2271b1">/{post.slug || "..."}</span>
-        <input id="post-slug" type="hidden" value={post.slug} />
+      <div id="permalink-row" style="font-size:12px;color:#646970;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+        <span>Permalink:</span>
+        <span id="permalink-view" style="display:inline-flex;align-items:center;gap:4px">
+          <a id="permalink-link" href={post.slug ? `/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `/${post.slug}` : "—"}</a>
+          <button onclick="startEditSlug()" style="font-size:11px;color:#2271b1;background:none;border:none;padding:0 2px;cursor:pointer;font-family:inherit;text-decoration:underline">Edit</button>
+        </span>
+        <span id="permalink-edit" style="display:none;align-items:center;gap:4px">
+          <input id="post-slug" type="text" value={post.slug}
+            style="font-size:12px;padding:2px 6px;border:1px solid #8c8f94;border-radius:2px;outline:none;width:200px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')confirmSlug();if(event.key==='Escape')cancelEditSlug()"
+          />
+          <button onclick="confirmSlug()" style="font-size:11px;padding:2px 8px;background:#2271b1;color:#fff;border:none;border-radius:2px;cursor:pointer">OK</button>
+          <button onclick="cancelEditSlug()" style="font-size:11px;padding:2px 8px;background:none;border:1px solid #dcdcde;border-radius:2px;cursor:pointer;color:#646970">Cancel</button>
+        </span>
       </div>
 
       <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;min-height:480px">
@@ -115,6 +128,24 @@ const backUrl = `/admin/cpt/${type}`;
         </div>
       )}
 
+      <!-- Taxonomy panels -->
+      {postTaxonomies.map((tax) => (
+        <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
+          <div style="background:#f6f7f7;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcde">
+            {tax.config.pluralLabel}
+          </div>
+          <div style="padding:14px">
+            <TaxonomyPanel
+              client:only="react"
+              postId={id}
+              taxonomy={tax.slug}
+              label={tax.config.label}
+              hierarchical={tax.config.hierarchical ?? false}
+            />
+          </div>
+        </div>
+      ))}
+
       <!-- Plugin sidebar panels -->
       {panels.map((panel) => (
         <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
@@ -145,19 +176,50 @@ const backUrl = `/admin/cpt/${type}`;
           .replace(/^-+|-+$/g, "");
       }
 
+      var slugLocked = false;
+
       window.updateSlug = function (title) {
-        var titleEl = document.getElementById("post-title");
-        if (!currentSlug || currentSlug === slugify(titleEl.defaultValue)) {
-          currentSlug = slugify(title);
-          document.getElementById("permalink-display").textContent = "/" + (currentSlug || "...");
-          document.getElementById("post-slug").value = currentSlug;
-        }
+        if (slugLocked) return;
+        var preview = slugify(title);
+        var link = document.getElementById("permalink-link");
+        if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
+      };
+
+      function setPermalinkDisplay(slug) {
+        var link = document.getElementById("permalink-link");
+        if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
+        var input = document.getElementById("post-slug");
+        if (input) input.value = slug;
+        currentSlug = slug;
+      }
+
+      window.startEditSlug = function () {
+        var input = document.getElementById("post-slug");
+        if (!input.value) input.value = slugify(document.getElementById("post-title").value);
+        document.getElementById("permalink-view").style.display = "none";
+        document.getElementById("permalink-edit").style.display = "inline-flex";
+        input.focus(); input.select();
+      };
+
+      window.confirmSlug = function () {
+        var raw = document.getElementById("post-slug").value.trim();
+        var newSlug = raw ? slugify(raw) || raw.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
+        slugLocked = !!newSlug;
+        setPermalinkDisplay(newSlug);
+        document.getElementById("permalink-edit").style.display = "none";
+        document.getElementById("permalink-view").style.display = "inline-flex";
+      };
+
+      window.cancelEditSlug = function () {
+        document.getElementById("post-slug").value = currentSlug;
+        document.getElementById("permalink-edit").style.display = "none";
+        document.getElementById("permalink-view").style.display = "inline-flex";
       };
 
       window.savePost = async function (forceStatus) {
         var title = document.getElementById("post-title").value;
         var status = forceStatus || document.getElementById("post-status").value;
-        var slug = document.getElementById("post-slug").value || slugify(title);
+        var slug = document.getElementById("post-slug").value.trim() || slugify(title);
         var excerpt = document.getElementById("post-excerpt").value;
         var content = window.__editorContent || "";
 
@@ -170,6 +232,7 @@ const backUrl = `/admin/cpt/${type}`;
             body: JSON.stringify({ title: title, content: content, excerpt: excerpt, status: status, slug: slug }),
           });
           if (res.ok) {
+            if (!slugLocked) setPermalinkDisplay(slug);
             document.getElementById("save-status").textContent = "Saved \u2713";
             document.getElementById("post-status").value = status;
             setTimeout(function () { document.getElementById("save-status").textContent = ""; }, 3000);

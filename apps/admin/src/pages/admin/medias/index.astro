@@ -13,25 +13,31 @@ const perPage = 40;
 const totalPages = Math.ceil(total / perPage);
 ---
 <AdminLayout title="Media Library">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-    <h1 style="margin:0;font-size:22px;font-weight:600">Media Library</h1>
-    <label style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;font-size:13px;font-weight:600;cursor:pointer">
-      + Upload
-      <input id="upload-input" type="file" accept="image/*,video/*,application/pdf" multiple style="display:none" onchange="handleUpload(this)" />
-    </label>
-  </div>
 
-  <!-- Upload progress -->
-  <div id="upload-progress" style="display:none;background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:14px;margin-bottom:16px;font-size:13px;color:#646970">
+  <h1 class="wp-heading-inline">Media Library</h1>
+  <label class="page-title-action" style="cursor:pointer">
+    Add New
+    <input id="upload-input" type="file" accept="image/*,video/*,application/pdf" multiple style="display:none" onchange="handleUpload(this)" />
+  </label>
+  <hr class="wp-header-end" />
+
+  <div id="upload-progress" style="display:none;background:#fff;border:1px solid #dcdcde;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#646970;max-width:480px">
     Uploading…
   </div>
 
   {items.length === 0 ? (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:60px;text-align:center;color:#646970">
-      <div style="font-size:40px;margin-bottom:12px">🖼️</div>
-      <p style="margin:0 0 12px">No media yet.</p>
-      <label style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:3px;font-size:13px;cursor:pointer">
-        Upload your first file
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No Media Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        Upload images, videos, and documents to use in your content.
+      </p>
+      <label class="button button-primary" style="cursor:pointer">
+        Upload Your First File
         <input type="file" accept="image/*" style="display:none" onchange="handleUpload(this)" />
       </label>
     </div>
@@ -41,7 +47,7 @@ const totalPages = Math.ceil(total / perPage);
         <div
           class="media-item"
           data-id={item.id}
-          style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;cursor:pointer;transition:border-color 0.15s"
+          style="background:#fff;border:1px solid #dcdcde;border-radius:2px;overflow:hidden;cursor:pointer;transition:border-color 0.15s"
           onclick="selectItem(this)"
         >
           {item.mimeType.startsWith("image/") ? (
@@ -52,8 +58,11 @@ const totalPages = Math.ceil(total / perPage);
               loading="lazy"
             />
           ) : (
-            <div style="width:100%;height:120px;display:flex;align-items:center;justify-content:center;background:#f6f7f7;font-size:32px">
-              📄
+            <div style="width:100%;height:120px;display:flex;align-items:center;justify-content:center;background:#f6f7f7">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8c8f94" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
             </div>
           )}
           <div style="padding:8px">
@@ -65,22 +74,25 @@ const totalPages = Math.ceil(total / perPage);
     </div>
   )}
 
-  <!-- Item details panel (hidden by default) -->
+  <!-- Item details panel -->
   <div id="item-details" style="display:none;position:fixed;top:0;right:0;width:300px;height:100vh;background:#fff;border-left:1px solid #dcdcde;padding:20px;overflow-y:auto;z-index:100;box-shadow:-4px 0 12px rgba(0,0,0,.08)">
-    <button onclick="closeDetails()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:18px;cursor:pointer;color:#646970">✕</button>
+    <button onclick="closeDetails()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:18px;cursor:pointer;color:#646970;line-height:1">&#x2715;</button>
     <div id="details-content"></div>
   </div>
 
   {totalPages > 1 && (
-    <div style="display:flex;gap:6px;margin-top:20px;justify-content:center">
-      {Array.from({length: totalPages}, (_, i) => i + 1).map((p) => (
-        <a
-          href={`/admin/medias?page=${p}`}
-          style={`padding:5px 10px;border:1px solid #dcdcde;border-radius:3px;font-size:13px;text-decoration:none;background:${p === page ? "#2271b1" : "#fff"};color:${p === page ? "#fff" : "#2271b1"}`}
-        >
-          {p}
-        </a>
-      ))}
+    <div class="tablenav bottom">
+      <div class="tablenav-pages">
+        {Array.from({length: totalPages}, (_, i) => i + 1).map((p) => (
+          <a
+            href={`/admin/medias?page=${p}`}
+            class={p === page ? "button button-disabled" : "button"}
+            style={p === page ? "font-weight:700" : ""}
+          >
+            {p}
+          </a>
+        ))}
+      </div>
     </div>
   )}
 
@@ -113,11 +125,11 @@ const totalPages = Math.ceil(total / perPage);
       const details = document.getElementById("details-content") as HTMLElement | null;
       if (!details) return;
       details.innerHTML = `
-        ${imgSrc ? `<img src="${imgSrc}" style="width:100%;border-radius:4px;margin-bottom:12px" />` : ""}
+        ${imgSrc ? `<img src="${imgSrc}" style="width:100%;border-radius:2px;margin-bottom:12px" />` : ""}
         <div style="font-size:13px;font-weight:600;margin-bottom:6px">${title}</div>
         <div style="font-size:11px;color:#646970;margin-bottom:12px">${mime}</div>
         <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">URL</label>
-        <input type="text" value="${imgSrc}" readonly style="width:100%;font-size:11px;padding:6px 8px;border:1px solid #dcdcde;border-radius:3px" onclick="this.select()" />
+        <input type="text" value="${imgSrc}" readonly style="width:100%;font-size:11px;padding:6px 8px;border:1px solid #dcdcde;border-radius:2px" onclick="this.select()" />
       `;
       const itemDetails = document.getElementById("item-details") as HTMLElement | null;
       if (itemDetails) itemDetails.style.display = "block";
@@ -129,4 +141,6 @@ const totalPages = Math.ceil(total / perPage);
       document.querySelectorAll(".media-item").forEach((i) => (i as HTMLElement).style.borderColor = "#dcdcde");
     }
   </script>
+
 </AdminLayout>
+

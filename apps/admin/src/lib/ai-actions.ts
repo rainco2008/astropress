@@ -7,7 +7,7 @@
 
 import { eq } from "drizzle-orm";
 import { wpOptions } from "@astropress/core/schema";
-import { registerPostType } from "@astropress/core/registry";
+import { registerPostType, registerTaxonomy } from "@astropress/core/registry";
 import { registerAIAction } from "./ai-registry";
 import { createPost, updatePost, deletePost } from "./posts";
 import { slugify } from "./slugify";
@@ -129,19 +129,69 @@ registerAIAction({
 
     const forms: any[] = row?.optionValue ? JSON.parse(row.optionValue) : [];
     const id = `form_${Date.now()}`;
+    const now = new Date().toISOString();
+
+    const fields = (params.fields ?? []).map((f: any, i: number) => ({
+      id: `field_${Date.now()}_${i}`,
+      type: f.type ?? "text",
+      label: f.label ?? `Field ${i + 1}`,
+      required: f.required ?? false,
+      placeholder: f.placeholder ?? "",
+      options: f.options ?? [],
+      size: "large",
+      description: "",
+      cssClass: "",
+      defaultValue: "",
+    }));
+
     const newForm = {
       id,
-      name: params.name ?? "New Form",
       title: params.name ?? "New Form",
-      fields: (params.fields ?? []).map((f: any, i: number) => ({
-        id: `field_${i + 1}`,
-        type: f.type ?? "text",
-        label: f.label ?? `Field ${i + 1}`,
-        required: f.required ?? false,
-        placeholder: f.placeholder ?? "",
-        options: f.options ?? [],
-      })),
-      createdAt: new Date().toISOString(),
+      fields,
+      settings: {
+        submitText: "Submit",
+        submitProcessingText: "Sending…",
+        submitAlign: "left",
+        formClass: "",
+        labelAlignment: "top",
+        ajax: true,
+        honeypot: true,
+        requireLogin: false,
+        requireLoginMessage: "You must be logged in.",
+        scheduleForm: false,
+        scheduleStart: "",
+        scheduleEnd: "",
+        scheduleClosedMessage: "This form is currently closed.",
+        limitEntries: false,
+        limitEntriesCount: 100,
+        limitEntriesMessage: "Sorry, this form is no longer accepting entries.",
+        storeEntries: true,
+      },
+      notifications: [{
+        id: `notif_${Date.now()}`,
+        name: "Admin Notification",
+        active: true,
+        toAddress: "{admin_email}",
+        fromName: "{site_name}",
+        fromEmail: "{admin_email}",
+        replyTo: "{field:email}",
+        subject: `New Entry: ${params.name ?? "New Form"}`,
+        message: "{all_fields}",
+        conditionalLogic: false,
+      }],
+      confirmations: [{
+        id: `conf_${Date.now()}`,
+        name: "Default Confirmation",
+        active: true,
+        type: "message",
+        message: "<p>Thanks for contacting us! We will be in touch with you shortly.</p>",
+        redirectUrl: "",
+        page: "",
+        autoScroll: true,
+        conditionalLogic: false,
+      }],
+      createdAt: now,
+      updatedAt: now,
     };
     forms.push(newForm);
 
@@ -155,7 +205,7 @@ registerAIAction({
 
     return {
       success: true,
-      message: `Created form "${newForm.name}"`,
+      message: `Created form "${newForm.title}"`,
       navigate: `/admin/forms/${id}`,
       data: { id },
     };
@@ -166,8 +216,8 @@ registerAIAction({
 
 registerAIAction({
   type: "createPostType",
-  description: "Register a custom post type (e.g. products, events, testimonials)",
-  example: '{"type":"createPostType","name":"Products","key":"product","singular":"Product","description":"Store product listings","icon":"tag"}',
+  description: "Register a custom post type (e.g. products, events, testimonials). Does NOT navigate — let the final action in the chain handle navigation.",
+  example: '{"type":"createPostType","name":"Products","key":"product","singular":"Product","icon":"tag","description":"Store product listings"}',
   serverSide: true,
   handler: async (params, db) => {
     if (!params.key || !/^[a-z0-9_]+$/.test(params.key)) {
@@ -186,15 +236,19 @@ registerAIAction({
       return { success: false, message: `Post type "${params.key}" already exists` };
     }
 
+    const pluralName = params.name ?? params.key;
+    const singularName = params.singular ?? (pluralName.replace(/s$/i, "") || pluralName);
+
     const newType = {
       key: params.key,
       config: {
-        name: params.name ?? params.key,
-        singular: params.singular ?? params.name ?? params.key,
+        label: singularName,
+        pluralLabel: pluralName,
         description: params.description ?? "",
         icon: params.icon ?? "folder",
         public: true,
         showInMenu: true,
+        custom: true,
         supports: ["title", "editor", "excerpt"],
       },
     };
@@ -209,13 +263,71 @@ registerAIAction({
       });
 
     try {
-      registerPostType(newType.key, newType.config);
+      registerPostType(newType.key, newType.config as any);
     } catch {}
 
     return {
       success: true,
-      message: `Created post type "${newType.config.name}"`,
-      navigate: `/admin/cpt/${params.key}`,
+      message: `Created post type "${newType.config.pluralLabel}"`,
+      data: { key: params.key },
+    };
+  },
+});
+
+// ─── Taxonomies ───────────────────────────────────────────────────────────────
+
+registerAIAction({
+  type: "createTaxonomy",
+  description: "Create a custom taxonomy and attach it to one or more post types. Always create the post type first if it doesn't exist yet.",
+  example: '{"type":"createTaxonomy","name":"Job Types","key":"job_type","singular":"Job Type","postTypes":["job_application"],"hierarchical":true}',
+  serverSide: true,
+  handler: async (params, db) => {
+    if (!params.key || !/^[a-z0-9_]+$/.test(params.key)) {
+      return { success: false, message: "key must be lowercase alphanumeric with underscores" };
+    }
+
+    const row = await db
+      .select()
+      .from(wpOptions)
+      .where(eq(wpOptions.optionName, "astropress_custom_taxonomies"))
+      .get();
+
+    const existing: any[] = row?.optionValue ? JSON.parse(row.optionValue) : [];
+
+    const pluralName = params.name ?? params.key;
+    const singularName = params.singular ?? (pluralName.replace(/s$/i, "") || pluralName);
+
+    const entry = {
+      key: params.key,
+      label: singularName,
+      pluralLabel: pluralName,
+      description: params.description ?? "",
+      postTypes: Array.isArray(params.postTypes) ? params.postTypes : [],
+      hierarchical: params.hierarchical ?? false,
+      public: params.public ?? true,
+      showInRest: params.showInRest ?? true,
+      custom: true,
+    };
+
+    const idx = existing.findIndex((t: any) => t.key === params.key);
+    if (idx >= 0) existing[idx] = entry;
+    else existing.push(entry);
+
+    await db
+      .insert(wpOptions)
+      .values({ optionName: "astropress_custom_taxonomies", optionValue: JSON.stringify(existing) })
+      .onConflictDoUpdate({
+        target: wpOptions.optionName,
+        set: { optionValue: JSON.stringify(existing) },
+      });
+
+    try {
+      registerTaxonomy(entry.key, entry as any);
+    } catch {}
+
+    return {
+      success: true,
+      message: `Created taxonomy "${entry.pluralLabel}"`,
       data: { key: params.key },
     };
   },

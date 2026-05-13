@@ -97,7 +97,8 @@ export async function createPost(
   }
 ): Promise<number> {
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-  const slug = data.slug || slugify(data.title) || `post-${Date.now()}`;
+  // Leave slug empty if title is blank — it will be set when the user saves with a title
+  const slug = data.slug || slugify(data.title) || "";
 
   const result = await db.insert(wpPosts).values({
     postTitle: data.title,

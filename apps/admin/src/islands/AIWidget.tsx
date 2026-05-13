@@ -99,73 +99,7 @@ function executeClientAction(action: Action, persistAndNavigate: (url: string, p
   }
 }
 
-/** Execute server-side actions via /api/ai/execute. Returns result chips. */
-async function executeServerActions(actions: Action[]): Promise<{ chips: ActionChip[]; navigateTo: string | null }> {
-  if (!actions.length) return { chips: [], navigateTo: null };
 
-  const chips: ActionChip[] = [];
-  let navigateTo: string | null = null;
-
-  try {
-    const res = await fetch("/api/ai/execute", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actions }),
-    });
-    const data = await res.json();
-    const results: Array<{ success: boolean; message: string; navigate?: string }> = data.results ?? [];
-
-    for (const r of results) {
-      chips.push({ label: r.message, ok: r.success });
-      if (r.navigate) navigateTo = r.navigate;
-    }
-  } catch (e: any) {
-    chips.push({ label: e.message ?? "Server action failed", ok: false });
-  }
-
-  return { chips, navigateTo };
-}
-
-/** Parse AI response, run all actions, return chips + stripped content. */
-async function processResponse(
-  text: string,
-  persistAndNavigate: (url: string, pending: Action[]) => void
-): Promise<{ content: string; chips: ActionChip[] }> {
-  // Extract action blocks
-  const allActions: Action[] = [];
-  const content = text
-    .replace(/```action\n([\s\S]*?)```/g, (_, json) => {
-      try { allActions.push(JSON.parse(json.trim())); } catch {}
-      return "";
-    })
-    .trim();
-
-  const serverActions = allActions.filter((a) => !CLIENT_SIDE.has(a.type));
-  const clientActions = allActions.filter((a) => CLIENT_SIDE.has(a.type) && a.type !== "navigate");
-  const navigateAction = allActions.find((a) => a.type === "navigate");
-
-  const chips: ActionChip[] = [];
-
-  // 1. Run server-side actions first
-  const { chips: serverChips, navigateTo: serverNav } = await executeServerActions(serverActions);
-  chips.push(...serverChips);
-
-  const finalNav = serverNav ?? navigateAction?.url ?? null;
-
-  if (finalNav) {
-    // Save client-side DOM actions as pending for the next page
-    persistAndNavigate(finalNav, clientActions);
-    chips.push({ label: `Opening ${finalNav}…`, ok: true });
-  } else {
-    // Run client-side actions on the current page
-    for (const action of clientActions) {
-      const label = executeClientAction(action, persistAndNavigate);
-      if (label) chips.push({ label, ok: true });
-    }
-  }
-
-  return { content, chips };
-}
 
 // ─── Quick prompts ────────────────────────────────────────────────────────────
 
@@ -223,6 +157,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [liveChips, setLiveChips] = useState<ActionChip[]>([]);
   const [error, setError] = useState("");
   const [resumed, setResumed] = useState(false);
 
@@ -341,6 +276,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     setMessages(newMessages);
     setInput("");
     setLoading(true);
+    setLiveChips([]);
     setError("");
 
     try {
@@ -353,8 +289,56 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "Request failed");
 
-      const { content: replyContent, chips } = await processResponse(data.reply, persistAndNavigate);
+      // ── Parse action blocks from reply ────────────────────────────────
+      const allActions: Action[] = [];
+      const replyContent = data.reply
+        .replace(/```action\n([\s\S]*?)```/g, (_: string, json: string) => {
+          try { allActions.push(JSON.parse(json.trim())); } catch {}
+          return "";
+        })
+        .trim();
 
+      const serverActions = allActions.filter((a) => !CLIENT_SIDE.has(a.type));
+      const clientActions = allActions.filter((a) => CLIENT_SIDE.has(a.type) && a.type !== "navigate");
+      const navigateAction = allActions.find((a) => a.type === "navigate");
+
+      const chips: ActionChip[] = [];
+      let navigateTo: string | null = null;
+
+      // ── Execute server actions one-by-one with live progress ──────────
+      for (const action of serverActions) {
+        try {
+          const r = await fetch("/api/ai/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          });
+          const d = await r.json();
+          const result = d.results?.[0] ?? { success: false, message: "No result" };
+          const chip: ActionChip = { label: result.message, ok: result.success };
+          chips.push(chip);
+          setLiveChips([...chips]);                 // update UI after each step
+          if (result.navigate) navigateTo = result.navigate; // last navigate wins
+        } catch (e: any) {
+          const chip: ActionChip = { label: e.message ?? "Action failed", ok: false };
+          chips.push(chip);
+          setLiveChips([...chips]);
+        }
+      }
+
+      // ── Navigate or run client-side DOM actions ───────────────────────
+      const finalNav = navigateTo ?? navigateAction?.url ?? null;
+      if (finalNav) {
+        persistAndNavigate(finalNav, clientActions);
+        chips.push({ label: `Opening ${finalNav}…`, ok: true });
+      } else {
+        for (const action of clientActions) {
+          const label = executeClientAction(action, persistAndNavigate);
+          if (label) chips.push({ label, ok: true });
+        }
+      }
+
+      setLiveChips([]);
       setMessages([
         ...newMessages,
         { role: "assistant", content: replyContent, appliedActions: chips },
@@ -538,7 +522,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
           })}
 
           {loading && (
-            <div style={{ alignSelf: "flex-start" }}>
+            <div style={{ alignSelf: "flex-start", display: "flex", flexDirection: "column", gap: 5, maxWidth: "96%" }}>
               <div style={{
                 background: "#f6f7f7", border: "1px solid #dcdcde",
                 padding: "8px 14px", borderRadius: "2px 12px 12px 12px",
@@ -546,6 +530,25 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
               }}>
                 <AnimatedDots />
               </div>
+              {liveChips.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {liveChips.map((a, ai) => (
+                    <span key={ai} style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      background: a.ok ? "#d1e7dd" : "#f8d7da",
+                      color: a.ok ? "#146c43" : "#842029",
+                      borderRadius: 4, padding: "3px 9px",
+                      fontSize: 11, fontWeight: 600, alignSelf: "flex-start",
+                    }}>
+                      {a.ok
+                        ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      }
+                      {a.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

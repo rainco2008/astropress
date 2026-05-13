@@ -7,48 +7,79 @@ const page = Number(Astro.url.searchParams.get("page") ?? "1");
 const { posts, total } = db
   ? await listPosts(db, { type: "page", page })
   : { posts: [], total: 0 };
+
+const perPage = 20;
+const totalPages = Math.ceil(total / perPage);
 ---
 <AdminLayout title="Pages">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-    <h1 style="margin:0;font-size:22px;font-weight:600">Pages</h1>
-    <a href="/admin/pages/new" style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">+ New Page</a>
-  </div>
+
+  <h1 class="wp-heading-inline">Pages</h1>
+  <a href="/admin/pages/new" class="page-title-action">Add New</a>
+  <hr class="wp-header-end" />
 
   {posts.length === 0 ? (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:40px;text-align:center;color:#646970">
-      No pages yet. <a href="/admin/pages/new" style="color:#2271b1">Create your first page →</a>
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No Pages Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        Create pages for your site like About, Contact, or a Home page.
+      </p>
+      <a href="/admin/pages/new" class="button button-primary">Add Your First Page</a>
     </div>
   ) : (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="background:#f6f7f7;border-bottom:1px solid #dcdcde">
-            <th style="text-align:left;padding:10px 16px;font-weight:600">Title</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600">Status</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600">Date</th>
-            <th style="padding:10px 16px"></th>
+    <table class="wp-list-table widefat fixed striped">
+      <thead>
+        <tr>
+          <th scope="col" class="manage-column column-primary">Title</th>
+          <th scope="col" class="manage-column" style="width:100px">Status</th>
+          <th scope="col" class="manage-column" style="width:120px">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {posts.map((p) => (
+          <tr>
+            <td class="title column-title has-row-actions column-primary">
+              <strong>
+                <a href={`/admin/pages/${p.id}`} class="row-title">
+                  {p.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
+                </a>
+              </strong>
+              <div style="font-size:11px;color:#8c8f94;font-family:monospace;margin-top:2px">/{p.slug}</div>
+              <div class="row-actions">
+                <span class="edit"><a href={`/admin/pages/${p.id}`}>Edit</a></span> |
+                <span class="view"><a href={`/${p.slug}`} target="_blank" rel="noopener">View</a></span>
+              </div>
+            </td>
+            <td>
+              <span style={`display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${p.status === "publish" ? "#d1e7dd" : "#fff3cd"};color:${p.status === "publish" ? "#146c43" : "#997404"}`}>
+                {p.status === "publish" ? "Published" : p.status}
+              </span>
+            </td>
+            <td style="color:var(--wp-gray-600);font-size:12px">{p.date.slice(0, 10)}</td>
           </tr>
-        </thead>
-        <tbody>
-          {posts.map((p) => (
-            <tr style="border-bottom:1px solid #f0f0f1">
-              <td style="padding:12px 16px">
-                <a href={`/admin/pages/${p.id}`} style="font-weight:600;color:#1d2327;text-decoration:none">{p.title || <em>Untitled</em>}</a>
-                <div style="font-size:11px;color:#646970;margin-top:2px">/{p.slug}</div>
-              </td>
-              <td style="padding:12px 16px">
-                <span style={`font-size:11px;padding:2px 8px;border-radius:10px;background:${p.status === "publish" ? "#d1e7dd" : "#fff3cd"};color:${p.status === "publish" ? "#146c43" : "#997404"};font-weight:600`}>
-                  {p.status === "publish" ? "Published" : p.status}
-                </span>
-              </td>
-              <td style="padding:12px 16px;color:#646970;font-size:12px">{p.date.slice(0,10)}</td>
-              <td style="padding:12px 16px;text-align:right">
-                <a href={`/admin/pages/${p.id}`} style="font-size:12px;color:#2271b1;text-decoration:none">Edit</a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </tbody>
+    </table>
+  )}
+
+  {totalPages > 1 && (
+    <div class="tablenav bottom">
+      <div class="tablenav-pages">
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <a
+            href={`/admin/pages?page=${p}`}
+            class={p === page ? "button button-disabled" : "button"}
+            style={p === page ? "font-weight:700" : ""}
+          >
+            {p}
+          </a>
+        ))}
+      </div>
     </div>
   )}
+
 </AdminLayout>
+

@@ -6,8 +6,5 @@ const { id } = Astro.params;
 if (!Astro.locals.user) return Astro.redirect("/login");
 ---
 <AdminLayout title="Form Builder">
-  <style>
-    .content { padding: 0 !important; }
-  </style>
   <FormBuilder client:only="react" formId={id} />
 </AdminLayout>

@@ -13,72 +13,84 @@ const menus = await db
   .where(eq(wpTermTaxonomy.taxonomy, "nav_menu"));
 ---
 <AdminLayout title="Menus">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
-    <h1 class="page-title" style="margin:0">Menus</h1>
-    <button id="btn-new" style="background:#2271b1;color:#fff;padding:8px 16px;border-radius:4px;font-size:13px;font-weight:600;border:none;cursor:pointer">
-      + New Menu
-    </button>
-  </div>
 
-  <div id="create-panel" style="display:none;background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:20px;margin-bottom:20px">
-    <h2 style="margin:0 0 14px;font-size:15px;font-weight:600">Create Menu</h2>
-    <div style="display:flex;gap:10px;align-items:flex-end">
+  <h1 class="wp-heading-inline">Menus</h1>
+  <button id="btn-new" class="page-title-action" style="background:none;border:none;cursor:pointer;font-family:inherit">Add New</button>
+  <hr class="wp-header-end" />
+
+  <div id="create-panel" style="display:none;background:#fff;border:1px solid #dcdcde;padding:16px 20px;margin-bottom:16px;max-width:480px">
+    <h2 style="margin:0 0 12px;font-size:14px;font-weight:600">Create Menu</h2>
+    <div style="display:flex;gap:8px;align-items:flex-end">
       <div style="flex:1">
         <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Menu Name</label>
-        <input id="new-name" type="text" placeholder="e.g. Primary Navigation"
-          style="width:100%;padding:7px 10px;font-size:13px;border:1px solid #8c8f94;border-radius:3px;box-sizing:border-box" />
+        <input id="new-name" type="text" placeholder="e.g. Primary Navigation" class="regular-text" style="width:100%" />
       </div>
-      <button id="btn-create" style="padding:7px 18px;background:#2271b1;color:#fff;border:none;border-radius:3px;font-size:13px;cursor:pointer">Create</button>
-      <button id="btn-cancel" style="padding:7px 14px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:3px;font-size:13px;cursor:pointer">Cancel</button>
+      <button id="btn-create" class="button button-primary">Create</button>
+      <button id="btn-cancel" class="button">Cancel</button>
     </div>
   </div>
 
   {menus.length === 0 ? (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:48px;text-align:center;color:#646970">
-      <p style="margin:0 0 16px;font-size:15px">No menus yet.</p>
-      <p style="margin:0;font-size:13px">Create a menu and add it to your site's navigation.</p>
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No Menus Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        Create a menu and add it to your site's navigation areas.
+      </p>
+      <button onclick="document.getElementById('btn-new').click()" class="button button-primary">Create Your First Menu</button>
     </div>
   ) : (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:8px;overflow:hidden">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="background:#f6f7f7">
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#3c434a">Name</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#3c434a">Slug</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#3c434a">Location</th>
-            <th style="padding:10px 16px"></th>
+    <table class="wp-list-table widefat fixed striped">
+      <thead>
+        <tr>
+          <th scope="col" class="manage-column column-primary">Name</th>
+          <th scope="col" class="manage-column" style="width:140px">Slug</th>
+          <th scope="col" class="manage-column" style="width:180px">Location</th>
+        </tr>
+      </thead>
+      <tbody>
+        {menus.map((menu) => (
+          <tr>
+            <td class="title column-title has-row-actions column-primary">
+              <strong>
+                <a href={`/admin/menus/${menu.id}`} class="row-title">{menu.name}</a>
+              </strong>
+              <div class="row-actions">
+                <span class="edit"><a href={`/admin/menus/${menu.id}`}>Edit</a></span> |
+                <span class="trash">
+                  <button
+                    onclick={`deleteMenu(${menu.id}, '${menu.name.replace(/'/g, "\\'")}')`}
+                    class="ap-row-delete-btn"
+                  >Delete</button>
+                </span>
+              </div>
+            </td>
+            <td style="color:var(--wp-gray-600)">
+              <code style="font-size:11px;background:#f6f7f7;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">{menu.slug}</code>
+            </td>
+            <td style="color:var(--wp-gray-600);font-size:12px">
+              {menu.slug === "primary" ? (
+                <span style="color:#2271b1;font-weight:600">Primary Navigation</span>
+              ) : menu.slug === "footer" ? (
+                <span style="color:#2271b1;font-weight:600">Footer Navigation</span>
+              ) : (
+                <span style="color:#c3c4c7">—</span>
+              )}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {menus.map((menu) => (
-            <tr style="border-top:1px solid #f0f0f1">
-              <td style="padding:12px 16px;font-weight:600">{menu.name}</td>
-              <td style="padding:12px 16px;color:#646970">
-                <code style="font-size:12px;background:#f6f7f7;padding:2px 6px;border-radius:3px">{menu.slug}</code>
-              </td>
-              <td style="padding:12px 16px;color:#646970;font-size:12px">
-                {menu.slug === "primary" ? <span style="color:#2271b1;font-weight:600">Primary Navigation</span> : "—"}
-                {menu.slug === "footer" ? <span style="color:#2271b1;font-weight:600">Footer Navigation</span> : ""}
-              </td>
-              <td style="padding:12px 16px;text-align:right">
-                <a href={`/admin/menus/${menu.id}`}
-                   style="font-size:12px;color:#2271b1;text-decoration:none;margin-right:12px">Edit</a>
-                <button
-                  onclick={`deleteMenu(${menu.id}, '${menu.name.replace(/'/g,"\\'")}')` }
-                  style="background:none;border:none;color:#dc3232;cursor:pointer;font-size:12px;padding:0">Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   )}
 
-  <div style="margin-top:24px;background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:20px">
-    <h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#3c434a">Menu Locations</h2>
+  <div style="margin-top:20px;background:#f6f7f7;border:1px solid #dcdcde;padding:14px 16px;max-width:600px">
     <p style="margin:0;font-size:13px;color:#646970">
-      The web theme uses the menu with slug <code style="background:#f6f7f7;padding:2px 6px;border-radius:3px">primary</code> as the main navigation.
-      Name your menu <strong>Primary</strong> (or any name) — as long as its slug is <code style="background:#f6f7f7;padding:2px 6px;border-radius:3px">primary</code> it will appear in the header automatically.
+      The web theme uses the menu with slug <code style="background:#fff;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">primary</code> as the main navigation.
+      Name your menu anything — as long as its slug is <code style="background:#fff;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">primary</code> it will appear in the header automatically.
     </p>
   </div>
 
@@ -113,4 +125,6 @@ const menus = await db
     }
     (window as any).deleteMenu = deleteMenu;
   </script>
+
 </AdminLayout>
+

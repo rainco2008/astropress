@@ -44,37 +44,102 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 interface FieldMeta { label: string; icon: string; category: string; noValue?: boolean; }
 const FIELDS: Record<string, FieldMeta> = {
-  text:              { label: "Single Line Text",  icon: "T",  category: "Standard" },
-  textarea:          { label: "Paragraph Text",    icon: "¶",  category: "Standard" },
-  dropdown:          { label: "Dropdown",          icon: "▼",  category: "Standard" },
-  multiple_choice:   { label: "Multiple Choice",   icon: "⊙",  category: "Standard" },
-  checkboxes:        { label: "Checkboxes",        icon: "☑",  category: "Standard" },
-  number:            { label: "Number",            icon: "#",  category: "Standard" },
-  name:              { label: "Name",              icon: "👤", category: "Standard" },
-  email:             { label: "Email",             icon: "@",  category: "Standard" },
-  url:               { label: "Website / URL",     icon: "🔗", category: "Standard" },
-  phone:             { label: "Phone",             icon: "📞", category: "Standard" },
-  address:           { label: "Address",           icon: "📍", category: "Standard" },
-  date_time:         { label: "Date / Time",       icon: "📅", category: "Standard" },
-  file:              { label: "File Upload",       icon: "📎", category: "Fancy" },
-  page_break:        { label: "Page Break",        icon: "📄", category: "Fancy", noValue: true },
-  section_divider:   { label: "Section Divider",   icon: "—",  category: "Fancy", noValue: true },
-  html:              { label: "HTML / Custom HTML",icon: "</>",category: "Fancy", noValue: true },
-  hidden:            { label: "Hidden Field",      icon: "👁", category: "Fancy" },
-  rating:            { label: "Rating",            icon: "⭐", category: "Fancy" },
-  likert:            { label: "Likert Scale",      icon: "⊞",  category: "Fancy" },
-  signature:         { label: "Signature",         icon: "✍",  category: "Fancy" },
-  password:          { label: "Password",          icon: "🔒", category: "Fancy" },
-  content:           { label: "Content",           icon: "📝", category: "Fancy", noValue: true },
-  payment_single:    { label: "Single Item",       icon: "$",  category: "Payment" },
-  payment_multiple:  { label: "Multiple Items",    icon: "$$", category: "Payment" },
-  payment_checkbox:  { label: "Checkbox Items",    icon: "☑$", category: "Payment" },
-  payment_dropdown:  { label: "Dropdown Items",    icon: "▼$", category: "Payment" },
-  payment_total:     { label: "Total",             icon: "Σ",  category: "Payment" },
-  nps:               { label: "Net Promoter Score",icon: "📊", category: "Survey" },
-  range_slider:      { label: "Range Slider",      icon: "↔",  category: "Advanced" },
-  captcha:           { label: "CAPTCHA",           icon: "🤖", category: "Advanced" },
+  text:              { label: "Single Line Text",  icon: "text",           category: "Standard" },
+  textarea:          { label: "Paragraph Text",    icon: "textarea",       category: "Standard" },
+  dropdown:          { label: "Dropdown",          icon: "dropdown",       category: "Standard" },
+  multiple_choice:   { label: "multiple_choice",   icon: "multiple_choice",category: "Standard" },
+  checkboxes:        { label: "Checkboxes",        icon: "checkboxes",     category: "Standard" },
+  number:            { label: "Number",            icon: "number",         category: "Standard" },
+  name:              { label: "Name",              icon: "name",           category: "Standard" },
+  email:             { label: "Email",             icon: "email",          category: "Standard" },
+  url:               { label: "Website / URL",     icon: "url",            category: "Standard" },
+  phone:             { label: "Phone",             icon: "phone",          category: "Standard" },
+  address:           { label: "Address",           icon: "address",        category: "Standard" },
+  date_time:         { label: "Date / Time",       icon: "date_time",      category: "Standard" },
+  file:              { label: "File Upload",       icon: "file",           category: "Fancy" },
+  page_break:        { label: "Page Break",        icon: "page_break",     category: "Fancy", noValue: true },
+  section_divider:   { label: "Section Divider",   icon: "section_divider",category: "Fancy", noValue: true },
+  html:              { label: "HTML / Custom HTML",icon: "html",           category: "Fancy", noValue: true },
+  hidden:            { label: "Hidden Field",      icon: "hidden",         category: "Fancy" },
+  rating:            { label: "Rating",            icon: "rating",         category: "Fancy" },
+  likert:            { label: "Likert Scale",      icon: "likert",         category: "Fancy" },
+  signature:         { label: "Signature",         icon: "signature",      category: "Fancy" },
+  password:          { label: "Password",          icon: "password",       category: "Fancy" },
+  content:           { label: "Content",           icon: "content",        category: "Fancy", noValue: true },
+  payment_single:    { label: "Single Item",       icon: "payment",        category: "Payment" },
+  payment_multiple:  { label: "Multiple Items",    icon: "payment",        category: "Payment" },
+  payment_checkbox:  { label: "Checkbox Items",    icon: "payment",        category: "Payment" },
+  payment_dropdown:  { label: "Dropdown Items",    icon: "payment",        category: "Payment" },
+  payment_total:     { label: "Total",             icon: "payment_total",  category: "Payment" },
+  nps:               { label: "Net Promoter Score",icon: "nps",            category: "Survey" },
+  range_slider:      { label: "Range Slider",      icon: "range_slider",   category: "Advanced" },
+  captcha:           { label: "CAPTCHA",           icon: "captcha",        category: "Advanced" },
 };
+
+// ─── Field Icons (SVG) ────────────────────────────────────────────────────────
+
+function FieldIcon({ type, size = 15 }: { type: string; size?: number }) {
+  const s = { width: size, height: size, flexShrink: 0 } as const;
+  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  switch (type) {
+    case "text":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>;
+    case "textarea":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg>;
+    case "dropdown":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="8 10 12 14 16 10"/></svg>;
+    case "multiple_choice":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>;
+    case "checkboxes":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 12 11 14 15 10"/></svg>;
+    case "number":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>;
+    case "name":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case "email":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>;
+    case "url":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+    case "phone":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6 6l.9-.9a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21.73 16z"/></svg>;
+    case "address":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
+    case "date_time":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    case "file":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
+    case "page_break":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 2"/></svg>;
+    case "section_divider":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6" strokeOpacity="0.3"/><line x1="3" y1="18" x2="21" y2="18" strokeOpacity="0.3"/></svg>;
+    case "html":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
+    case "hidden":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+    case "rating":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
+    case "likert":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
+    case "signature":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>;
+    case "password":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+    case "content":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case "payment":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+    case "payment_total":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+    case "nps":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+    case "range_slider":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><line x1="3" y1="12" x2="21" y2="12"/><circle cx="8" cy="12" r="3" fill="currentColor" stroke="none"/></svg>;
+    case "captcha":
+      return <svg viewBox="0 0 24 24" style={s} {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
+    default:
+      return <svg viewBox="0 0 24 24" style={s} {...p}><rect x="3" y="3" width="18" height="18" rx="2"/></svg>;
+  }
+}
 
 const CATEGORIES = ["Standard", "Fancy", "Payment", "Survey", "Advanced"];
 
@@ -606,10 +671,10 @@ function FieldSettings({ field, update, allFields }: { field: FormField; update:
                 </FField>
                 <FField label="Icon">
                   <select style={S.select} value={field.ratingIcon ?? "star"} onChange={e => u("ratingIcon", e.target.value)}>
-                    <option value="star">Star ⭐</option>
-                    <option value="heart">Heart ❤️</option>
-                    <option value="thumb">Thumb 👍</option>
-                    <option value="smiley">Smiley 😊</option>
+                    <option value="star">Star</option>
+                    <option value="heart">Heart</option>
+                    <option value="thumb">Thumb</option>
+                    <option value="smiley">Smiley</option>
                     <option value="bullet">Bullet •</option>
                   </select>
                 </FField>
@@ -848,7 +913,7 @@ function CanvasField({ field, selected, onSelect, onDelete, onDuplicate, onMove,
       ) : (
         <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "11px", color: "#c3c4c7", cursor: "grab" }}>⠿⠿</span>
-          <span style={{ fontSize: "16px", width: "22px", textAlign: "center", flexShrink: 0 }}>{m?.icon ?? "?"}</span>
+          <span style={{ width: 22, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#646970" }}><FieldIcon type={field.type} size={15} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             {!field.hideLabel && <span style={{ fontSize: "13px", fontWeight: 600, color: "#1d2327" }}>{field.label || "Untitled"}</span>}
             {field.required && <span style={{ color: "#d63638", marginLeft: "4px", fontWeight: 700 }}>*</span>}
@@ -1132,7 +1197,12 @@ export default function FormBuilder({ formId }: { formId?: string }) {
   const [form, setForm] = useState<WPForm | null>(null);
   const [tab, setTab] = useState<"fields"|"settings"|"notifications"|"confirmations">("fields");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [fieldCategory, setFieldCategory] = useState("Standard");
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set(["Standard"]));
+  const toggleCategory = (cat: string) => setOpenCategories(prev => {
+    const next = new Set(prev);
+    next.has(cat) ? next.delete(cat) : next.add(cat);
+    return next;
+  });
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -1217,10 +1287,10 @@ export default function FormBuilder({ formId }: { formId?: string }) {
     setDragId(null); setDragOverId(null);
   };
 
-  const categoryFields = Object.entries(FIELDS).filter(([, m]) => m.category === fieldCategory);
+  const fieldsByCategory = (cat: string) => Object.entries(FIELDS).filter(([, m]) => m.category === cat);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 100px)", margin: "-28px -32px" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 32px)", margin: "-20px -20px -40px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 20px", background: "#fff", borderBottom: "1px solid #dcdcde", flexShrink: 0 }}>
         <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
@@ -1262,25 +1332,57 @@ export default function FormBuilder({ formId }: { formId?: string }) {
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
         {tab === "fields" && (
           <>
-            {/* Left: Field Type Panel */}
-            <div style={{ width: "200px", borderRight: "1px solid #dcdcde", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-              <div style={{ padding: "10px 12px", borderBottom: "1px solid #dcdcde", fontSize: "11px", fontWeight: 700, color: "#646970", textTransform: "uppercase", letterSpacing: "0.5px" }}>Add Fields</div>
-              <div style={{ display: "flex", gap: 0, overflowX: "auto", borderBottom: "1px solid #dcdcde" }}>
-                {CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => setFieldCategory(cat)} style={{ padding: "6px 8px", border: "none", background: "none", borderBottom: cat === fieldCategory ? "2px solid #2271b1" : "2px solid transparent", color: cat === fieldCategory ? "#2271b1" : "#646970", cursor: "pointer", fontSize: "10px", fontWeight: cat === fieldCategory ? 700 : 400, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {cat}
-                  </button>
-                ))}
+            {/* Left: Field Type Accordion */}
+            <div style={{ width: "220px", borderRight: "1px solid #dcdcde", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid #dcdcde", fontSize: "11px", fontWeight: 700, color: "#646970", textTransform: "uppercase", letterSpacing: "0.6px", background: "#f6f7f7" }}>
+                Add Fields
               </div>
-              <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
-                {categoryFields.map(([type, meta]) => (
-                  <button key={type} onClick={() => addField(type)} style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "8px 10px", border: "1px solid #dcdcde", borderRadius: "3px", background: "#fff", cursor: "pointer", fontSize: "12px", color: "#1d2327", textAlign: "left", marginBottom: "3px" }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#f0f6fc"; e.currentTarget.style.borderColor = "#2271b1"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#dcdcde"; }}>
-                    <span style={{ fontSize: "14px", width: "18px", textAlign: "center", flexShrink: 0 }}>{meta.icon}</span>
-                    <span>{meta.label}</span>
-                  </button>
-                ))}
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {CATEGORIES.map(cat => {
+                  const items = fieldsByCategory(cat);
+                  const isOpen = openCategories.has(cat);
+                  return (
+                    <div key={cat} style={{ borderBottom: "1px solid #f0f0f1" }}>
+                      {/* Accordion header */}
+                      <button
+                        onClick={() => toggleCategory(cat)}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "10px 14px", border: "none", background: isOpen ? "#f0f6fc" : "#fff",
+                          cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                          color: isOpen ? "#2271b1" : "#1d2327", textAlign: "left",
+                        }}
+                        onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = "#f6f7f7"; }}
+                        onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "#fff"; }}
+                      >
+                        <span>{cat}</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          style={{ transition: "transform .15s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", color: isOpen ? "#2271b1" : "#8c8f94" }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                      {/* Accordion body */}
+                      {isOpen && (
+                        <div style={{ padding: "6px 10px 10px" }}>
+                          {items.map(([type, meta]) => (
+                            <button
+                              key={type}
+                              onClick={() => addField(type)}
+                              style={{ display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: "3px", background: "#fff", cursor: "pointer", fontSize: "12px", color: "#1d2327", textAlign: "left", marginBottom: "4px" }}
+                              onMouseEnter={e => { e.currentTarget.style.background = "#f0f6fc"; e.currentTarget.style.borderColor = "#2271b1"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e0e0e0"; }}
+                            >
+                              <span style={{ width: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#2271b1" }}>
+                                <FieldIcon type={type} size={13} />
+                              </span>
+                              <span style={{ lineHeight: 1.3 }}>{meta.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1288,9 +1390,14 @@ export default function FormBuilder({ formId }: { formId?: string }) {
             <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#f6f7f7" }} onClick={() => setSelectedId(null)}>
               {form.fields.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 20px", color: "#646970", border: "2px dashed #dcdcde", borderRadius: "4px", background: "#fff" }}>
-                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
-                  <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "8px" }}>Add fields from the left panel</div>
-                  <div style={{ fontSize: "12px" }}>Click a field type to add it to your form</div>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c3c4c7" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "12px" }}>
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                    <rect x="8" y="2" width="8" height="4" rx="1"/>
+                    <line x1="9" y1="12" x2="15" y2="12"/>
+                    <line x1="9" y1="16" x2="13" y2="16"/>
+                  </svg>
+                  <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "6px", color: "#1d2327" }}>No fields yet</div>
+                  <div style={{ fontSize: "12px" }}>Click a field type on the left to add it</div>
                 </div>
               ) : (
                 <div onClick={e => e.stopPropagation()}>
@@ -1317,7 +1424,7 @@ export default function FormBuilder({ formId }: { formId?: string }) {
               {selectedField ? (
                 <>
                   <div style={{ padding: "12px 16px", borderBottom: "1px solid #dcdcde", display: "flex", alignItems: "center", gap: "8px", background: "#f6f7f7" }}>
-                    <span style={{ fontSize: "16px" }}>{FIELDS[selectedField.type]?.icon ?? "?"}</span>
+                    <span style={{ display: "flex", alignItems: "center", color: "#2271b1" }}><FieldIcon type={selectedField.type} size={16} /></span>
                     <span style={{ fontSize: "13px", fontWeight: 700, color: "#1d2327", flex: 1 }}>Field Options</span>
                     <button onClick={() => setSelectedId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#646970", fontSize: "16px" }}>×</button>
                   </div>

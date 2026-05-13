@@ -32,77 +32,96 @@ const label = postTypeConfig.pluralLabel;
 const singularLabel = postTypeConfig.label;
 ---
 <AdminLayout title={label}>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-    <h1 style="margin:0;font-size:22px;font-weight:600">{label}</h1>
-    <a href={`${baseUrl}/new`} style="background:#2271b1;color:#fff;padding:7px 14px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:600">
-      + New {singularLabel}
-    </a>
-  </div>
 
-  <!-- Status filter tabs -->
-  <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #dcdcde">
+  <h1 class="wp-heading-inline">{label}</h1>
+  <a href={`${baseUrl}/new`} class="page-title-action">Add New</a>
+  <hr class="wp-header-end" />
+
+  <ul class="subsubsub">
     {statusOptions.map((s) => (
-      <a
-        href={s.value ? `${baseUrl}?status=${s.value}` : baseUrl}
-        style={`padding:8px 14px;font-size:13px;text-decoration:none;border-bottom:2px solid ${(status ?? "") === s.value ? "#2271b1" : "transparent"};color:${(status ?? "") === s.value ? "#2271b1" : "#646970"}`}
-      >
-        {s.label}
-      </a>
+      <li>
+        <a
+          href={s.value ? `${baseUrl}?status=${s.value}` : baseUrl}
+          class={(status ?? "") === s.value ? "current" : ""}
+        >
+          {s.label}
+        </a>
+      </li>
     ))}
-  </div>
+  </ul>
 
   {posts.length === 0 ? (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:40px;text-align:center;color:#646970">
-      No {label.toLowerCase()} found. <a href={`${baseUrl}/new`} style="color:#2271b1">Create your first {singularLabel.toLowerCase()} →</a>
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No {label} Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        {status ? `No ${label.toLowerCase()} with status "${status}".` : `Create your first ${singularLabel.toLowerCase()} to get started.`}
+      </p>
+      <a href={`${baseUrl}/new`} class="button button-primary">Add Your First {singularLabel}</a>
     </div>
   ) : (
-    <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden">
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead>
-          <tr style="background:#f6f7f7;border-bottom:1px solid #dcdcde">
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Title</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Status</th>
-            <th style="text-align:left;padding:10px 16px;font-weight:600;color:#1d2327">Date</th>
-            <th style="padding:10px 16px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {posts.map((post) => (
-            <tr style="border-bottom:1px solid #f0f0f1">
-              <td style="padding:12px 16px">
-                <a href={`${baseUrl}/${post.id}`} style="font-weight:600;color:#1d2327;text-decoration:none;font-size:14px">
-                  {post.title || <em style="color:#646970">Untitled</em>}
+    <table class="wp-list-table widefat fixed striped">
+      <thead>
+        <tr>
+          <th scope="col" class="manage-column column-primary">Title</th>
+          <th scope="col" class="manage-column" style="width:100px">Status</th>
+          <th scope="col" class="manage-column" style="width:120px">Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {posts.map((post) => (
+          <tr>
+            <td class="title column-title has-row-actions column-primary">
+              <strong>
+                <a href={`${baseUrl}/${post.id}`} class="row-title">
+                  {post.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
                 </a>
-                <div style="font-size:11px;color:#646970;margin-top:2px">/{post.slug}</div>
-              </td>
-              <td style="padding:12px 16px">
-                <span style={`font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : "#997404"}`}>
-                  {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+              </strong>
+              <div style="font-size:11px;color:#8c8f94;font-family:monospace;margin-top:2px">/{post.slug}</div>
+              <div class="row-actions">
+                <span class="edit"><a href={`${baseUrl}/${post.id}`}>Edit</a></span> |
+                <span class="trash">
+                  <button
+                    onclick={`if(confirm('Move to trash?'))fetch('/api/posts/${post.id}',{method:'DELETE'}).then(()=>location.reload())`}
+                    class="ap-row-delete-btn"
+                  >Trash</button>
                 </span>
-              </td>
-              <td style="padding:12px 16px;color:#646970;font-size:12px">
-                {post.date.slice(0, 10)}
-              </td>
-              <td style="padding:12px 16px;text-align:right">
-                <a href={`${baseUrl}/${post.id}`} style="font-size:12px;color:#2271b1;text-decoration:none">Edit</a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+              </div>
+            </td>
+            <td>
+              <span style={`display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : post.status === "trash" ? "#f8d7da" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : post.status === "trash" ? "#842029" : "#997404"}`}>
+                {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+              </span>
+            </td>
+            <td style="color:var(--wp-gray-600);font-size:12px">
+              {post.date.slice(0, 10)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )}
 
   {totalPages > 1 && (
-    <div style="display:flex;gap:6px;margin-top:16px;justify-content:center">
-      {Array.from({length: totalPages}, (_, i) => i + 1).map((p) => (
-        <a
-          href={`${baseUrl}?page=${p}${status ? `&status=${status}` : ""}`}
-          style={`padding:5px 10px;border:1px solid #dcdcde;border-radius:3px;font-size:13px;text-decoration:none;background:${p === page ? "#2271b1" : "#fff"};color:${p === page ? "#fff" : "#2271b1"}`}
-        >
-          {p}
-        </a>
-      ))}
+    <div class="tablenav bottom">
+      <div class="tablenav-pages">
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <a
+            href={`${baseUrl}?page=${p}${status ? `&status=${status}` : ""}`}
+            class={p === page ? "button button-disabled" : "button"}
+            style={p === page ? "font-weight:700" : ""}
+          >
+            {p}
+          </a>
+        ))}
+      </div>
     </div>
   )}
+
 </AdminLayout>
+
