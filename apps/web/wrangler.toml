@@ -4,7 +4,7 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
 [build]
-command = "ASTRO_ADAPTER=cloudflare pnpm build"
+command = "cd ../.. && pnpm install && ASTRO_ADAPTER=cloudflare pnpm --filter @astropress/web build"
 
 [[d1_databases]]
 binding = "DB"

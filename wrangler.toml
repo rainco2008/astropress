@@ -1,9 +1,16 @@
-# Root wrangler config — shared bindings reference
-# Each app has its own wrangler.toml for deployment
+# Cloudflare Pages config for astropress-admin
+# This file is read from the repo root by Cloudflare Pages Git integration.
+#
+# Web app (astropress-web) is a separate Pages project — configure it in the
+# Cloudflare dashboard with the settings in apps/web/wrangler.toml.
 
-name = "astropress"
+name = "astropress-admin"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "apps/admin/dist"
+
+[build]
+command = "pnpm install && ASTRO_ADAPTER=cloudflare pnpm --filter @astropress/admin build"
 
 [[d1_databases]]
 binding = "DB"
@@ -13,3 +20,6 @@ database_id = "00000000-0000-0000-0000-000000000001"
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "astropress-media"
+
+[vars]
+SITE_URL = "https://your-admin.pages.dev"
