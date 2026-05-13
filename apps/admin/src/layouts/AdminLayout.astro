@@ -1,13 +1,15 @@
 ---
 import { getPostTypes } from "@astropress/core/registry";
 import { adminIcons } from "../lib/icons";
+import AIWidget from "../islands/AIWidget";
 
 interface Props {
   title?: string;
   activeSlug?: string;
+  pageContext?: Record<string, any>;
 }
 
-const { title = "AstroPress Admin", activeSlug } = Astro.props;
+const { title = "AstroPress Admin", pageContext = {} } = Astro.props;
 const user = Astro.locals.user;
 const currentPath = new URL(Astro.request.url).pathname;
 
@@ -20,78 +22,316 @@ const icons = adminIcons;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
-    <style>
+    <title>{title} — AstroPress</title>
+    <style is:global>
+      /* ─── WordPress Design System tokens ──────────────────────────────── */
+      :root {
+        --wp-blue:            #2271b1;
+        --wp-blue-hover:      #135e96;
+        --wp-blue-medium:     #0a4b78;
+        --wp-blue-light:      #e8f0fb;
+        --wp-red:             #d63638;
+        --wp-red-hover:       #b32d2e;
+        --wp-green:           #00a32a;
+        --wp-orange:          #dba617;
+        --wp-body-bg:         #f0f0f1;
+        --wp-white:           #ffffff;
+        --wp-gray-900:        #1d2327;
+        --wp-gray-800:        #2c3338;
+        --wp-gray-700:        #3c434a;
+        --wp-gray-600:        #50575e;
+        --wp-gray-500:        #646970;
+        --wp-gray-400:        #8c8f94;
+        --wp-gray-300:        #c3c4c7;
+        --wp-gray-200:        #dcdcde;
+        --wp-gray-100:        #f0f0f1;
+        --wp-gray-50:         #f6f7f7;
+        --wp-sidebar-bg:      #1d2327;
+        --wp-sidebar-width:   160px;
+        --wp-sidebar-text:    #a7aaad;
+        --wp-sidebar-active:  #72aee6;
+        --wp-sidebar-hover:   #2c3338;
+        --wp-bar-height:      32px;
+        --wp-font:            -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                              Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        --wp-radius:          3px;
+      }
+
+      /* ─── Reset ───────────────────────────────────────────────────────── */
       *, *::before, *::after { box-sizing: border-box; }
-      body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f6f7f7; color: #1d2327; }
-      .layout { display: flex; min-height: 100vh; }
+      body {
+        margin: 0;
+        font-family: var(--wp-font);
+        font-size: 13px;
+        line-height: 1.4;
+        background: var(--wp-body-bg);
+        color: var(--wp-gray-900);
+      }
 
-      /* Sidebar */
-      .sidebar { width: 220px; background: #1d2327; color: #a7aaad; flex-shrink: 0; display: flex; flex-direction: column; }
-      .sidebar-brand {
-        padding: 14px 20px; font-size: 15px; font-weight: 700; color: #fff;
-        border-bottom: 1px solid #2c3338; letter-spacing: -0.2px;
+      /* ─── Admin bar ───────────────────────────────────────────────────── */
+      .wp-admin-bar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+        height: var(--wp-bar-height);
+        background: var(--wp-gray-900);
+        display: flex; align-items: center;
+        padding: 0 12px; gap: 16px;
+      }
+      .wp-admin-bar-brand {
+        display: flex; align-items: center; gap: 7px;
+        color: #eee; font-size: 13px; font-weight: 600;
+        text-decoration: none;
+      }
+      .wp-admin-bar-brand svg { opacity: 0.85; flex-shrink: 0; }
+      .wp-admin-bar-spacer { flex: 1; }
+      .wp-admin-bar-user {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 12px; color: var(--wp-gray-400);
+      }
+      .wp-admin-bar-user svg { opacity: 0.5; }
+      .wp-admin-bar-user strong { color: var(--wp-gray-300); font-weight: 500; }
+
+      /* ─── Layout ──────────────────────────────────────────────────────── */
+      .wp-layout {
+        display: flex;
+        padding-top: var(--wp-bar-height);
+        min-height: 100vh;
+      }
+
+      /* ─── Sidebar ─────────────────────────────────────────────────────── */
+      .wp-sidebar {
+        width: var(--wp-sidebar-width);
+        background: var(--wp-sidebar-bg);
+        color: var(--wp-sidebar-text);
+        flex-shrink: 0;
+        display: flex; flex-direction: column;
+        position: fixed;
+        top: var(--wp-bar-height); bottom: 0; left: 0;
+        overflow-y: auto; z-index: 9999;
+      }
+      .wp-sidebar-nav { padding: 4px 0; flex: 1; }
+      .wp-sidebar-sep { height: 1px; background: rgba(255,255,255,.07); margin: 6px 0; }
+      .wp-sidebar-section {
+        padding: 16px 14px 4px;
+        font-size: 11px; font-weight: 500;
+        text-transform: uppercase; letter-spacing: 0.6px;
+        color: #4f5457;
+      }
+      .wp-sidebar-nav a {
         display: flex; align-items: center; gap: 8px;
+        padding: 6px 14px;
+        color: var(--wp-sidebar-text);
+        text-decoration: none; font-size: 13px;
+        transition: background 0.08s;
       }
-      .sidebar-brand svg { opacity: 0.9; flex-shrink: 0; }
-      .sidebar-nav { padding: 8px 0; flex: 1; overflow-y: auto; }
-      .nav-section { padding: 16px 20px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #4f5457; }
-      .sidebar-nav a {
-        display: flex; align-items: center; gap: 9px;
-        padding: 7px 20px; color: #a7aaad; text-decoration: none; font-size: 13px;
-        border-left: 3px solid transparent;
-        transition: background 0.1s, color 0.1s;
+      .wp-sidebar-nav a:hover { color: #fff; background: var(--wp-sidebar-hover); }
+      .wp-sidebar-nav a.is-active {
+        color: var(--wp-sidebar-active);
+        background: rgba(255,255,255,.04);
+        box-shadow: inset 4px 0 0 var(--wp-sidebar-active);
       }
-      .sidebar-nav a:hover { color: #fff; background: #2c3338; }
-      .sidebar-nav a.active { color: #fff; background: #2c3338; border-left-color: #2271b1; }
-      .sidebar-nav a svg { flex-shrink: 0; opacity: 0.75; }
-      .sidebar-nav a:hover svg, .sidebar-nav a.active svg { opacity: 1; }
-      .sidebar-footer {
-        padding: 12px 20px; border-top: 1px solid #2c3338; font-size: 12px; color: #646970;
-      }
-      .sidebar-footer-user { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
-      .sidebar-footer-user svg { opacity: 0.6; flex-shrink: 0; }
-      .sidebar-footer strong { color: #a7aaad; font-size: 12px; }
-      .sidebar-footer-logout {
-        display: flex; align-items: center; gap: 6px; color: #646970; font-size: 11px; cursor: pointer;
-        background: none; border: none; padding: 0; font-family: inherit;
-      }
-      .sidebar-footer-logout:hover { color: #a7aaad; }
-      .sidebar-footer-logout svg { opacity: 0.6; }
-      .sidebar-footer-logout:hover svg { opacity: 0.9; }
+      .wp-sidebar-nav a svg { flex-shrink: 0; opacity: 0.7; }
+      .wp-sidebar-nav a:hover svg,
+      .wp-sidebar-nav a.is-active svg { opacity: 1; }
 
-      /* Main */
-      .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-      .topbar {
-        background: #fff; border-bottom: 1px solid #dcdcde; padding: 0 24px; height: 46px;
-        display: flex; align-items: center; justify-content: space-between;
+      /* ─── Sidebar sub-menu ────────────────────────────────────────────── */
+      .wp-sidebar-submenu { display: none; background: #161b1e; }
+      .wp-sidebar-submenu.is-open { display: block; }
+      .wp-sidebar-submenu a {
+        padding: 5px 14px 5px 30px;
+        font-size: 12px; color: #9ea3a8;
       }
-      .topbar-title { font-size: 13px; color: #646970; font-weight: 500; }
-      .topbar-user { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #646970; }
-      .topbar-user svg { opacity: 0.5; }
-      .content { flex: 1; padding: 28px 32px; }
-      .page-title { font-size: 22px; font-weight: 600; margin: 0 0 24px; }
+      .wp-sidebar-submenu a:hover { color: #fff; background: #0d1115; }
+      .wp-sidebar-submenu a.is-active { color: var(--wp-sidebar-active); background: transparent; box-shadow: none; }
+      .wp-sidebar-submenu a.is-active::before { content: "›"; margin-right: 4px; }
+      .wp-sidebar-footer {
+        padding: 10px 14px 14px;
+        border-top: 1px solid rgba(255,255,255,.07);
+        font-size: 11px; color: var(--wp-gray-500);
+      }
+      .wp-sidebar-footer-user {
+        display: flex; align-items: center; gap: 6px;
+        margin-bottom: 6px; color: var(--wp-gray-400);
+      }
+      .wp-sidebar-footer-user svg { opacity: 0.55; }
+      .wp-sidebar-footer strong { font-size: 12px; color: var(--wp-gray-300); }
+      .wp-sidebar-footer-logout {
+        display: flex; align-items: center; gap: 6px;
+        color: var(--wp-gray-500); font-size: 11px;
+        background: none; border: none; padding: 3px 0;
+        font-family: inherit; cursor: pointer; width: 100%; text-align: left;
+      }
+      .wp-sidebar-footer-logout:hover { color: var(--wp-gray-300); }
+      .wp-sidebar-footer-logout svg { opacity: 0.55; }
 
-      /* Gutenberg editor container */
+      /* ─── Main content ────────────────────────────────────────────────── */
+      .wp-main { flex: 1; margin-left: var(--wp-sidebar-width); min-width: 0; display: flex; flex-direction: column; }
+      .wp-content { flex: 1; padding: 20px 20px 40px; }
+
+      /* ─── Page heading ────────────────────────────────────────────────── */
+      .wp-heading { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+      .wp-heading h1 { font-size: 23px; font-weight: 400; line-height: 1.3; margin: 0; padding: 9px 0 4px; color: var(--wp-gray-900); }
+      .wp-page-title { font-size: 23px; font-weight: 400; line-height: 1.3; margin: 0 0 16px; padding: 9px 0 4px; color: var(--wp-gray-900); }
+
+      /* ─── Buttons ─────────────────────────────────────────────────────── */
+      .button, .button-primary, .button-secondary {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 30px; padding: 0 12px;
+        font-family: var(--wp-font); font-size: 13px; font-weight: 400;
+        line-height: 28px; border-radius: var(--wp-radius);
+        cursor: pointer; text-decoration: none; white-space: nowrap;
+        transition: border-color .05s, background .05s;
+      }
+      .button, .button-secondary {
+        background: var(--wp-gray-50); border: 1px solid var(--wp-blue); color: var(--wp-blue);
+      }
+      .button:hover, .button-secondary:hover { background: var(--wp-blue); color: #fff; border-color: var(--wp-blue-hover); }
+      .button-primary { background: var(--wp-blue); border: 1px solid var(--wp-blue-hover); color: #fff; font-weight: 600; }
+      .button-primary:hover { background: var(--wp-blue-hover); border-color: var(--wp-blue-medium); color: #fff; }
+      .button-link { background: none; border: none; padding: 0; height: auto; line-height: inherit; color: var(--wp-blue); text-decoration: underline; cursor: pointer; font-family: inherit; font-size: inherit; }
+      .button-link:hover { color: var(--wp-blue-hover); }
+      .button-link-delete { background: none; border: none; padding: 0; height: auto; line-height: inherit; color: var(--wp-red); text-decoration: underline; cursor: pointer; font-family: inherit; font-size: inherit; }
+      .button-link-delete:hover { color: var(--wp-red-hover); }
+      .button-small { height: 24px; padding: 0 8px; font-size: 11px; line-height: 22px; }
+
+      /* ─── Postbox ─────────────────────────────────────────────────────── */
+      .postbox { background: var(--wp-white); border: 1px solid var(--wp-gray-300); margin-bottom: 20px; }
+      .postbox-header { padding: 8px 12px; border-bottom: 1px solid var(--wp-gray-200); display: flex; align-items: center; justify-content: space-between; }
+      .postbox-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--wp-gray-900); }
+      .postbox-inside { padding: 12px; }
+
+      /* ─── WP list table ───────────────────────────────────────────────── */
+      .wp-list-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--wp-white); border: 1px solid var(--wp-gray-300); }
+      .wp-list-table thead th { text-align: left; padding: 8px 10px; background: var(--wp-gray-50); border-bottom: 1px solid var(--wp-gray-300); font-weight: 600; color: var(--wp-gray-900); font-size: 13px; }
+      .wp-list-table tbody tr { border-bottom: 1px solid var(--wp-gray-200); }
+      .wp-list-table tbody tr:last-child { border-bottom: none; }
+      .wp-list-table tbody tr:nth-child(odd) { background: var(--wp-gray-50); }
+      .wp-list-table tbody tr:nth-child(even) { background: var(--wp-white); }
+      .wp-list-table tbody tr:hover { background: #f0f6fc; }
+      .wp-list-table td { padding: 9px 10px; vertical-align: top; }
+      .wp-list-table .column-title { font-weight: 600; }
+      .wp-list-table .row-actions { font-size: 11px; color: var(--wp-gray-500); margin-top: 3px; display: none; }
+      .wp-list-table tbody tr:hover .row-actions { display: block; }
+      .wp-list-table .row-actions a { color: var(--wp-gray-500); text-decoration: none; }
+      .wp-list-table .row-actions a:hover { color: var(--wp-blue); }
+      .wp-list-table .row-actions .delete a:hover { color: var(--wp-red); }
+      .wp-list-table .row-actions span { margin-right: 4px; padding-right: 4px; border-right: 1px solid var(--wp-gray-300); }
+      .wp-list-table .row-actions span:last-child { border-right: none; }
+
+      /* ─── Status badges ───────────────────────────────────────────────── */
+      .status-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+      .status-publish { background: #d1e7dd; color: #146c43; }
+      .status-draft   { background: #fff3cd; color: #856404; }
+      .status-private { background: #e2e3e5; color: #41464b; }
+      .status-trash   { background: #f8d7da; color: #842029; }
+
+      /* ─── Sub-tabs ────────────────────────────────────────────────────── */
+      .subsubsub { display: flex; gap: 0; margin: 0 0 12px; padding: 0; list-style: none; font-size: 13px; flex-wrap: wrap; }
+      .subsubsub li + li::before { content: "|"; margin: 0 6px; color: var(--wp-gray-400); }
+      .subsubsub a { color: var(--wp-blue); text-decoration: none; }
+      .subsubsub a:hover { text-decoration: underline; }
+      .subsubsub .current { color: var(--wp-gray-900); font-weight: 600; }
+
+      /* ─── Notice ──────────────────────────────────────────────────────── */
+      .notice { background: var(--wp-white); border: 1px solid var(--wp-gray-300); border-left: 4px solid var(--wp-blue); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+      .notice-success { border-left-color: var(--wp-green); }
+      .notice-warning { border-left-color: var(--wp-orange); }
+      .notice-error   { border-left-color: var(--wp-red); }
+
+      /* ─── Form controls ───────────────────────────────────────────────── */
+      .wp-form-label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
+      .wp-input, .wp-select, .wp-textarea {
+        font-family: var(--wp-font); font-size: 14px; color: var(--wp-gray-900);
+        border: 1px solid var(--wp-gray-400); border-radius: var(--wp-radius);
+        background: var(--wp-white); outline: none;
+        transition: border-color .08s, box-shadow .08s;
+      }
+      .wp-input, .wp-select { height: 30px; line-height: 28px; padding: 0 8px; }
+      .wp-textarea { padding: 6px 8px; resize: vertical; }
+      .wp-input:focus, .wp-select:focus, .wp-textarea:focus { border-color: var(--wp-blue); box-shadow: 0 0 0 1px var(--wp-blue); }
+
+      /* ─── Post title input ────────────────────────────────────────────── */
+      .wp-post-title-input {
+        width: 100%; font-size: 26px; font-weight: 400; line-height: 1.4;
+        font-family: var(--wp-font); color: var(--wp-gray-900);
+        background: transparent; border: none; border-bottom: 1px solid var(--wp-gray-200);
+        padding: 6px 0; margin-bottom: 16px; outline: none; display: block;
+      }
+      .wp-post-title-input:focus { border-bottom-color: var(--wp-blue); }
+      .wp-post-title-input::placeholder { color: var(--wp-gray-300); }
+
+      /* ─── Dashboard stats ─────────────────────────────────────────────── */
+      .wp-dashboard-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1px; background: var(--wp-gray-300); border: 1px solid var(--wp-gray-300); margin-bottom: 20px; }
+      .wp-stat-box { background: var(--wp-white); padding: 16px; text-decoration: none; color: inherit; display: flex; flex-direction: column; }
+      .wp-stat-box:hover { background: #f0f6fc; }
+      .wp-stat-num { font-size: 28px; font-weight: 400; line-height: 1.2; color: var(--wp-gray-900); }
+      .wp-stat-label { font-size: 14px; color: var(--wp-blue); margin-top: 2px; }
+
+      /* ─── WP nav tabs (Settings sub-pages) ───────────────────────────── */
+      .nav-tab-wrapper {
+        border-bottom: 1px solid var(--wp-gray-300);
+        margin: 0 0 20px;
+        padding-top: 9px;
+        padding-bottom: 0;
+        overflow: hidden;
+      }
+      .nav-tab {
+        float: left;
+        border: 1px solid var(--wp-gray-300);
+        border-bottom: none;
+        margin: 0 4px -1px 0;
+        padding: 5px 12px;
+        font-size: 13px; font-weight: 500;
+        line-height: 1.6;
+        background: #e5e5e5;
+        color: var(--wp-gray-600);
+        text-decoration: none;
+        border-radius: 3px 3px 0 0;
+        white-space: nowrap;
+        transition: background .08s, color .08s;
+      }
+      .nav-tab:hover { background: var(--wp-body-bg); color: var(--wp-gray-900); }
+      .nav-tab-active {
+        background: var(--wp-body-bg);
+        color: var(--wp-gray-900);
+        border-bottom-color: var(--wp-body-bg);
+        font-weight: 600;
+      }
+
+      /* ─── Gutenberg editor ────────────────────────────────────────────── */
       .gutenberg-editor { min-height: 400px; }
       .gutenberg-editor .block-editor-writing-flow { outline: none; }
       .gutenberg-editor .block-editor-block-list__layout { padding: 28px; }
     </style>
   </head>
   <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="sidebar-brand">
-          <Fragment set:html={icons.bolt} />
-          AstroPress
-        </div>
-        <nav class="sidebar-nav">
 
-          <a href="/admin/dashboard" class={currentPath === "/admin/dashboard" ? "active" : ""}>
+    <!-- Admin bar -->
+    <div class="wp-admin-bar">
+      <a class="wp-admin-bar-brand" href="/admin/dashboard">
+        <Fragment set:html={icons.bolt} />
+        AstroPress
+      </a>
+      <div class="wp-admin-bar-spacer"></div>
+      {user && (
+        <div class="wp-admin-bar-user">
+          <Fragment set:html={icons.user} />
+          <strong>Howdy, {user.displayName}</strong>
+        </div>
+      )}
+    </div>
+
+    <div class="wp-layout">
+
+      <!-- Sidebar -->
+      <aside class="wp-sidebar">
+        <nav class="wp-sidebar-nav">
+
+          <a href="/admin/dashboard" class={currentPath === "/admin/dashboard" ? "is-active" : ""}>
             <Fragment set:html={icons.dashboard} /> Dashboard
           </a>
 
-          <div class="nav-section">Content</div>
+          <div class="wp-sidebar-sep"></div>
+          <div class="wp-sidebar-section">Content</div>
           {postTypes.map((pt) => {
             const href = pt.slug === "post" ? "/admin/posts" : `/admin/cpt/${pt.slug}`;
             const active = pt.slug === "post"
@@ -99,49 +339,53 @@ const icons = adminIcons;
               : currentPath.startsWith(`/admin/cpt/${pt.slug}`);
             const icon = pt.slug === "post" ? icons.post : pt.slug === "page" ? icons.page : icons.folder;
             return (
-              <a href={href} class={active ? "active" : ""}>
+              <a href={href} class={active ? "is-active" : ""}>
                 <Fragment set:html={icon} />
                 {pt.config.pluralLabel}
               </a>
             );
           })}
-
-          <div class="nav-section">Forms</div>
-          <a href="/admin/forms" class={currentPath.startsWith("/admin/forms") ? "active" : ""}>
+          <a href="/admin/forms" class={currentPath.startsWith("/admin/forms") ? "is-active" : ""}>
             <Fragment set:html={icons.forms} /> Forms
           </a>
 
-          <div class="nav-section">Structure</div>
-          <a href="/admin/custom-fields" class={currentPath.startsWith("/admin/custom-fields") ? "active" : ""}>
+          <div class="wp-sidebar-sep"></div>
+          <div class="wp-sidebar-section">Structure</div>
+          <a href="/admin/custom-fields" class={currentPath.startsWith("/admin/custom-fields") ? "is-active" : ""}>
             <Fragment set:html={icons.fields} /> Custom Fields
           </a>
-          <a href="/admin/post-types" class={currentPath.startsWith("/admin/post-types") ? "active" : ""}>
+          <a href="/admin/post-types" class={currentPath.startsWith("/admin/post-types") ? "is-active" : ""}>
             <Fragment set:html={icons.posttypes} /> Post Types
           </a>
-          <a href="/admin/taxonomies" class={currentPath.startsWith("/admin/taxonomies") ? "active" : ""}>
+          <a href="/admin/taxonomies" class={currentPath.startsWith("/admin/taxonomies") ? "is-active" : ""}>
             <Fragment set:html={icons.taxonomies} /> Taxonomies
           </a>
 
-          <div class="nav-section">Site</div>
-          <a href="/admin/plugins" class={currentPath.startsWith("/admin/plugins") ? "active" : ""}>
+          <div class="wp-sidebar-sep"></div>
+          <div class="wp-sidebar-section">Site</div>
+          <a href="/admin/plugins" class={currentPath.startsWith("/admin/plugins") ? "is-active" : ""}>
             <Fragment set:html={icons.plugins} /> Plugins
           </a>
-          <a href="/admin/menus" class={currentPath.startsWith("/admin/menus") ? "active" : ""}>
+          <a href="/admin/menus" class={currentPath.startsWith("/admin/menus") ? "is-active" : ""}>
             <Fragment set:html={icons.menus} /> Menus
           </a>
-          <a href="/admin/settings" class={currentPath === "/admin/settings" ? "active" : ""}>
+          <a href="/admin/settings" class={currentPath.startsWith("/admin/settings") ? "is-active" : ""}>
             <Fragment set:html={icons.settings} /> Settings
           </a>
+          <div class={`wp-sidebar-submenu${currentPath.startsWith("/admin/settings") ? " is-open" : ""}`}>
+            <a href="/admin/settings" class={currentPath === "/admin/settings" || currentPath === "/admin/settings/" ? "is-active" : ""}>General</a>
+            <a href="/admin/settings/ai" class={currentPath.startsWith("/admin/settings/ai") ? "is-active" : ""}>AI</a>
+          </div>
 
         </nav>
         {user && (
-          <div class="sidebar-footer">
-            <div class="sidebar-footer-user">
+          <div class="wp-sidebar-footer">
+            <div class="wp-sidebar-footer-user">
               <Fragment set:html={icons.user} />
               <strong>{user.displayName}</strong>
             </div>
             <form method="POST" action="/api/auth/logout" style="margin:0">
-              <button type="submit" class="sidebar-footer-logout">
+              <button type="submit" class="wp-sidebar-footer-logout">
                 <Fragment set:html={icons.logout} />
                 Log out
               </button>
@@ -150,20 +394,17 @@ const icons = adminIcons;
         )}
       </aside>
 
-      <div class="main">
-        <div class="topbar">
-          <span class="topbar-title">{title}</span>
-          {user && (
-            <span class="topbar-user">
-              <Fragment set:html={icons.user} />
-              {user.userLogin}
-            </span>
-          )}
-        </div>
-        <div class="content">
+      <!-- Main -->
+      <div class="wp-main">
+        <div class="wp-content">
           <slot />
         </div>
       </div>
+
     </div>
+
+    <!-- AI Widget (floats globally) -->
+    <AIWidget client:only="react" pageContext={pageContext} />
+
   </body>
 </html>

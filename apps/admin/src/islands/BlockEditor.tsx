@@ -18,6 +18,9 @@ import {
   Placeholder,
   Spinner,
   TabPanel,
+  TextareaControl,
+  Button,
+  RadioControl,
 } from "@wordpress/components";
 import { registerCoreBlocks } from "@wordpress/block-library";
 import { parse, serialize, registerBlockType, getBlockType } from "@wordpress/blocks";
@@ -448,6 +451,323 @@ function registerFormBlock() {
   } as any);
 }
 
+// ─── AI Writer Block ──────────────────────────────────────────────────────────
+
+const AI_WRITER_CSS = `
+  .ap-ai-writer-block {
+    border: 1px solid #2271b1;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .ap-ai-writer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #f0f6fc;
+    border-bottom: 1px solid #c5d9f0;
+  }
+  .ap-ai-writer-header svg { color: #2271b1; flex-shrink: 0; }
+  .ap-ai-writer-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2271b1;
+    flex: 1;
+  }
+  .ap-ai-writer-prompt-area {
+    padding: 14px;
+    border-bottom: 1px solid #e0e8f0;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .ap-ai-writer-prompt-area textarea {
+    flex: 1;
+    min-height: 60px;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    font-size: 13px;
+    padding: 8px 10px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .ap-ai-writer-prompt-area textarea:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+  }
+  .ap-ai-writer-btn {
+    height: 32px;
+    padding: 0 14px;
+    background: #2271b1;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .ap-ai-writer-btn:hover { background: #135e96; }
+  .ap-ai-writer-btn:disabled { opacity: 0.6; cursor: not-allowed; background: #2271b1; }
+  .ap-ai-writer-btn.secondary {
+    background: #fff;
+    color: #2271b1;
+    border: 1px solid #2271b1;
+  }
+  .ap-ai-writer-btn.secondary:hover { background: #f0f6fc; }
+  .ap-ai-writer-content-area {
+    padding: 20px 24px;
+    min-height: 80px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #1d2327;
+    outline: none;
+  }
+  .ap-ai-writer-content-area[contenteditable="true"]:focus {
+    outline: none;
+  }
+  .ap-ai-writer-content-area h1,
+  .ap-ai-writer-content-area h2,
+  .ap-ai-writer-content-area h3 { margin: 1em 0 0.5em; line-height: 1.3; }
+  .ap-ai-writer-content-area p { margin: 0 0 1em; }
+  .ap-ai-writer-content-area ul,
+  .ap-ai-writer-content-area ol { margin: 0 0 1em; padding-left: 1.5em; }
+  .ap-ai-writer-content-area strong { font-weight: 600; }
+  .ap-ai-writer-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-top: 1px solid #e0e8f0;
+    background: #fafafa;
+  }
+  .ap-ai-writer-status {
+    font-size: 11px;
+    color: #646970;
+    flex: 1;
+  }
+  .ap-ai-writer-status.error { color: #d63638; }
+  .ap-ai-writer-generating {
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #646970;
+    font-size: 13px;
+  }
+`;
+
+function AIWriterBlockEdit({ attributes, setAttributes }: { attributes: any; setAttributes: (a: any) => void }) {
+  const blockProps = useBlockProps({ className: "ap-ai-writer-block" });
+  const [prompt, setPrompt] = useState(attributes.prompt ?? "");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+  const [tone, setTone] = useState(attributes.tone ?? "professional");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Inject block CSS once
+  useEffect(() => {
+    if (document.getElementById("ap-ai-writer-css")) return;
+    const style = document.createElement("style");
+    style.id = "ap-ai-writer-css";
+    style.textContent = AI_WRITER_CSS;
+    document.head.appendChild(style);
+  }, []);
+
+  // Sync content to DOM when attribute changes externally
+  useEffect(() => {
+    if (contentRef.current && attributes.content && contentRef.current.innerHTML !== attributes.content) {
+      contentRef.current.innerHTML = attributes.content;
+    }
+  }, [attributes.content]);
+
+  const getPostTitle = () => {
+    const el = document.querySelector<HTMLInputElement>("#post-title");
+    return el?.value?.trim() ?? "";
+  };
+
+  const generate = async (isRegenerate = false) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) return;
+    setGenerating(true);
+    setError("");
+
+    const postTitle = getPostTitle();
+    const toneNote = tone !== "professional" ? ` Use a ${tone} tone.` : "";
+    const regenNote = isRegenerate && attributes.content ? " Rewrite it — make it distinctly different." : "";
+    const userMessage = postTitle
+      ? `Post title: "${postTitle}". ${trimmedPrompt}${toneNote}${regenNote}`
+      : `${trimmedPrompt}${toneNote}${regenNote}`;
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: userMessage }],
+          context: { page: "block-editor", postTitle, blockPrompt: trimmedPrompt },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "AI request failed");
+
+      // Strip any action blocks from the reply — only keep HTML content
+      let html = (data.reply as string)
+        .replace(/```action[\s\S]*?```/g, "")
+        .trim();
+
+      // If the AI returned a setContent action, extract the HTML from it
+      const actionMatch = html.match(/\{"type":"setContent","html":"([\s\S]*?)"\}/);
+      if (actionMatch) {
+        try { html = JSON.parse(`"${actionMatch[1]}"`); } catch {}
+      }
+
+      // If the reply is not HTML (starts with text), wrap it
+      if (!html.startsWith("<")) {
+        html = `<p>${html.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+      }
+
+      setAttributes({ content: html, prompt: trimmedPrompt, tone });
+      if (contentRef.current) contentRef.current.innerHTML = html;
+    } catch (e: any) {
+      setError(e.message ?? "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleContentEdit = () => {
+    if (contentRef.current) {
+      setAttributes({ content: contentRef.current.innerHTML });
+    }
+  };
+
+  const hasContent = !!attributes.content;
+
+  return (
+    <div {...blockProps}>
+      <InspectorControls>
+        <PanelBody title="AI Writer Settings" initialOpen>
+          <RadioControl
+            label="Tone"
+            selected={tone}
+            options={[
+              { label: "Professional", value: "professional" },
+              { label: "Conversational", value: "conversational" },
+              { label: "Persuasive", value: "persuasive" },
+              { label: "Concise", value: "concise" },
+            ]}
+            onChange={(val: string) => { setTone(val); setAttributes({ tone: val }); }}
+          />
+        </PanelBody>
+      </InspectorControls>
+
+      {/* Header */}
+      <div className="ap-ai-writer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+        </svg>
+        <span className="ap-ai-writer-title">AI Writer</span>
+        {hasContent && !generating && (
+          <span style={{ fontSize: 11, color: "#00a32a", fontWeight: 600 }}>Content generated</span>
+        )}
+      </div>
+
+      {/* Prompt row */}
+      <div className="ap-ai-writer-prompt-area">
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          placeholder={hasContent ? "Describe changes or a new direction…" : "What should this section be about? e.g. 'Write an intro about our product benefits'"}
+          disabled={generating}
+          onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); generate(hasContent); } }}
+        />
+        <button
+          className="ap-ai-writer-btn"
+          onClick={() => generate(hasContent)}
+          disabled={generating || !prompt.trim()}
+        >
+          {generating ? (
+            <>
+              <Spinner style={{ margin: 0, width: 16, height: 16 }} />
+              Generating…
+            </>
+          ) : hasContent ? "Rewrite" : "Generate"}
+        </button>
+      </div>
+
+      {/* Content area */}
+      {generating && !hasContent ? (
+        <div className="ap-ai-writer-generating">
+          <Spinner />
+          Writing content…
+        </div>
+      ) : hasContent ? (
+        <>
+          <div
+            ref={contentRef}
+            className="ap-ai-writer-content-area"
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={handleContentEdit}
+            dangerouslySetInnerHTML={{ __html: attributes.content }}
+          />
+          <div className="ap-ai-writer-footer">
+            <span className={`ap-ai-writer-status${error ? " error" : ""}`}>
+              {error || "Edit directly or rewrite with a new prompt. Press ⌘+Enter to generate."}
+            </span>
+            <button
+              className="ap-ai-writer-btn secondary"
+              style={{ height: 26, fontSize: 11 }}
+              onClick={() => { setAttributes({ content: "", prompt: "" }); setPrompt(""); if (contentRef.current) contentRef.current.innerHTML = ""; }}
+            >
+              Clear
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: "12px 14px", fontSize: 12, color: "#646970" }}>
+          {error ? (
+            <span style={{ color: "#d63638" }}>{error}</span>
+          ) : (
+            "Enter a prompt above and click Generate to create content with AI."
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function registerAIWriterBlock() {
+  if (getBlockType("astropress/ai-writer")) return;
+  registerBlockType("astropress/ai-writer", {
+    title: "AI Writer",
+    description: "Generate and edit content using AI.",
+    icon: "edit",
+    category: "common",
+    attributes: {
+      content: { type: "string", default: "" },
+      prompt:  { type: "string", default: "" },
+      tone:    { type: "string", default: "professional" },
+    },
+    edit: AIWriterBlockEdit,
+    save: ({ attributes }: { attributes: any }) => {
+      if (!attributes.content) return null;
+      return <div className="wp-block-astropress-ai-writer" dangerouslySetInnerHTML={{ __html: attributes.content }} />;
+    },
+  } as any);
+}
+
 // ─── Inspector sidebar ────────────────────────────────────────────────────────
 
 function InspectorSidebar() {
@@ -521,12 +841,28 @@ export default function BlockEditor({ initialContent = "" }: Props) {
     if (!blocksRegistered) {
       registerCoreBlocks();
       registerFormBlock();
+      registerAIWriterBlock();
       blocksRegistered = true;
     }
     const parsed = parse(initialContent || "");
     setBlocks(parsed);
     (window as any).__editorContent = initialContent || "";
     setReady(true);
+
+    // Signal AIWidget that the editor is ready to receive content
+    window.dispatchEvent(new CustomEvent("ap:editorReady"));
+
+    // Listen for AI widget setContent requests
+    const handleSetContent = (e: Event) => {
+      const html = (e as CustomEvent<{ html: string }>).detail?.html;
+      if (html) {
+        const newBlocks = parse(html);
+        setBlocks(newBlocks);
+        (window as any).__editorContent = html;
+      }
+    };
+    window.addEventListener("ap:setContent", handleSetContent);
+    return () => window.removeEventListener("ap:setContent", handleSetContent);
   }, []);
 
   const handleChange = (newBlocks: ReturnType<typeof parse>) => {

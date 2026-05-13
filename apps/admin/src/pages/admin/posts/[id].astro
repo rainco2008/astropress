@@ -17,7 +17,10 @@ if (!post) return Astro.redirect("/admin/posts");
 
 const panels = getSidebarPanels("post");
 ---
-<AdminLayout title={post.title || "Edit Post"}>
+<AdminLayout
+  title={post.title || "Edit Post"}
+  pageContext={{ postId: id, postType: "post", postStatus: post.status }}
+>
   <div id="editor-root"
     data-post-id={String(id)}
     data-initial-slug={post.slug ?? ""}
@@ -30,15 +33,15 @@ const panels = getSidebarPanels("post");
         type="text"
         placeholder="Add title"
         value={post.title}
-        style="width:100%;font-size:28px;font-weight:700;border:none;border-bottom:2px solid #dcdcde;padding:8px 0;margin-bottom:20px;outline:none;background:transparent;color:#1d2327"
+        class="wp-post-title-input"
         oninput="updateSlug(this.value)"
       />
-      <div style="font-size:12px;color:#646970;margin-bottom:16px">
-        Permalink: <span id="permalink-display" style="color:#2271b1">/{post.slug || "..."}</span>
+      <div style="font-size:12px;color:var(--wp-gray-500);margin-bottom:16px">
+        Permalink: <span id="permalink-display" style="color:var(--wp-blue)">/{post.slug || "..."}</span>
         <input id="post-slug" type="hidden" value={post.slug} />
       </div>
 
-      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;min-height:480px">
+      <div class="postbox" style="overflow:hidden;min-height:480px">
         <BlockEditor
           client:only="react"
           initialContent={post.content}
@@ -47,14 +50,17 @@ const panels = getSidebarPanels("post");
       </div>
 
       <!-- Excerpt -->
-      <div style="margin-top:16px;background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px">
-        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Excerpt</label>
-        <textarea
-          id="post-excerpt"
-          rows="3"
-          placeholder="Optional excerpt…"
-          style="width:100%;font-size:13px;border:1px solid #dcdcde;border-radius:3px;padding:8px;resize:vertical;outline:none"
-        >{post.excerpt}</textarea>
+      <div class="postbox" style="margin-top:16px">
+        <div class="postbox-header"><h2 class="postbox-title">Excerpt</h2></div>
+        <div class="postbox-inside">
+          <textarea
+            id="post-excerpt"
+            rows="3"
+            placeholder="Optional excerpt…"
+            class="wp-textarea"
+            style="width:100%"
+          >{post.excerpt}</textarea>
+        </div>
       </div>
 
       <!-- Custom Fields -->
@@ -66,35 +72,30 @@ const panels = getSidebarPanels("post");
     <!-- Right sidebar -->
     <aside>
       <!-- Publish box -->
-      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
-        <div style="background:#f6f7f7;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcde">
-          Publish
-        </div>
-        <div style="padding:14px">
+      <div class="postbox">
+        <div class="postbox-header"><h2 class="postbox-title">Publish</h2></div>
+        <div class="postbox-inside">
           <div style="margin-bottom:12px">
-            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Status</label>
-            <select id="post-status" style="width:100%;padding:6px 8px;font-size:13px;border:1px solid #8c8f94;border-radius:3px">
+            <label class="wp-form-label">Visibility</label>
+            <select id="post-status" class="wp-select" style="width:100%">
               <option value="draft" selected={post.status === "draft"}>Draft</option>
               <option value="publish" selected={post.status === "publish"}>Published</option>
               <option value="private" selected={post.status === "private"}>Private</option>
             </select>
           </div>
 
-          <div id="save-status" style="font-size:12px;color:#646970;margin-bottom:12px;min-height:16px"></div>
+          <div id="save-status" style="font-size:11px;color:var(--wp-gray-500);margin-bottom:10px;min-height:14px"></div>
 
-          <div style="display:flex;gap:8px">
-            <button onclick="savePost('draft')" style="flex:1;padding:7px;font-size:13px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:3px;cursor:pointer">
-              Save Draft
-            </button>
-            <button onclick="savePost('publish')" style="flex:1;padding:7px;font-size:13px;background:#2271b1;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:600">
-              Publish
-            </button>
+          <div style="display:flex;gap:6px">
+            <button onclick="savePost('draft')" class="button" style="flex:1;justify-content:center">Save Draft</button>
+            <button onclick="savePost('publish')" class="button-primary" style="flex:1;justify-content:center">Publish</button>
           </div>
 
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f1">
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--wp-gray-100)">
             <button
-              onclick="if(confirm('Move to trash?')) { fetch('/api/posts/{id}', {method:'DELETE'}).then(() => location.href='/admin/posts') }"
-              style="font-size:12px;color:#d63638;background:none;border:none;cursor:pointer;padding:0"
+              onclick={`if(confirm('Move to trash?')) { fetch('/api/posts/${id}', {method:'DELETE'}).then(() => location.href='/admin/posts') }`}
+              class="button-link-delete"
+              style="font-size:12px"
             >
               Move to Trash
             </button>
@@ -104,18 +105,20 @@ const panels = getSidebarPanels("post");
 
       <!-- View post link -->
       {post.status === "publish" && (
-        <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:12px 14px;margin-bottom:16px;font-size:12px">
-          <a href={`/${post.slug}`} target="_blank" style="color:#2271b1">View post →</a>
+        <div class="postbox">
+          <div class="postbox-inside" style="font-size:12px">
+            <a href={`/${post.slug}`} target="_blank" class="button-link">View post →</a>
+          </div>
         </div>
       )}
 
       <!-- Plugin sidebar panels -->
       {panels.map((panel) => (
-        <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;margin-bottom:16px">
-          <div style="background:#f6f7f7;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid #dcdcde">
-            {panel.config.title}
+        <div class="postbox">
+          <div class="postbox-header">
+            <h2 class="postbox-title">{panel.config.title}</h2>
           </div>
-          <div style="padding:14px">
+          <div class="postbox-inside">
             {panel.config.componentId === "SeoPanel" && (
               <SeoPanel client:only="react" postId={id} />
             )}
