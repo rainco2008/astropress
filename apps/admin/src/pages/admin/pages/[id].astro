@@ -26,7 +26,7 @@ if (!post) return Astro.redirect("/admin/pages");
         Permalink: <span id="permalink-display">/{post.slug || "..."}</span>
         <input id="post-slug" type="hidden" value={post.slug} />
       </div>
-      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:20px;min-height:400px">
+      <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;min-height:480px">
         <BlockEditor
           client:only="react"
           initialContent={post.content}

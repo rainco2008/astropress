@@ -64,7 +64,7 @@ const quickPosts = await db
 const itemsJson = JSON.stringify(menuItems);
 ---
 <AdminLayout title={`Edit Menu: ${menu.name}`}>
-  <style>
+  <style is:global>
     .menu-item { display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fff; border:1px solid #dcdcde; border-radius:4px; margin-bottom:4px; cursor:grab; user-select:none; }
     .menu-item:active { cursor:grabbing; }
     .menu-item.drag-over { border-color:#2271b1; background:#f0f6fc; }
