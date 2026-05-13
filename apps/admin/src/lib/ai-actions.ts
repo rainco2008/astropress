@@ -241,16 +241,14 @@ registerAIAction({
 
     const newType = {
       key: params.key,
-      config: {
-        label: singularName,
-        pluralLabel: pluralName,
-        description: params.description ?? "",
-        icon: params.icon ?? "folder",
-        public: true,
-        showInMenu: true,
-        custom: true,
-        supports: ["title", "editor", "excerpt"],
-      },
+      label: singularName,
+      pluralLabel: pluralName,
+      description: params.description ?? "",
+      icon: params.icon ?? "folder",
+      public: true,
+      showInMenu: true,
+      custom: true,
+      supports: ["title", "editor", "excerpt"],
     };
     existing.push(newType);
 
@@ -263,12 +261,13 @@ registerAIAction({
       });
 
     try {
-      registerPostType(newType.key, newType.config as any);
+      const { key: _k, ...cfg } = newType;
+      registerPostType(newType.key, cfg as any);
     } catch {}
 
     return {
       success: true,
-      message: `Created post type "${newType.config.pluralLabel}"`,
+      message: `Created post type "${newType.pluralLabel}"`,
       data: { key: params.key },
     };
   },

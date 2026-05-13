@@ -1,13 +1,32 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
-import { getCustomPostTypes, getPostTypes } from "@astropress/core/registry";
 import { adminIcons, ICON_NAMES, getIcon } from "../../../lib/icons";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+
+const db = Astro.locals.db;
+if (!db || !Astro.locals.user) return Astro.redirect("/login");
 
 const editing = Astro.url.searchParams.get("edit");
 const isNew = Astro.url.searchParams.get("new") === "1";
 
-const customTypes = getCustomPostTypes();
-const allTypes = getPostTypes().filter(pt => pt.config.custom);
+// Read directly from DB — avoids registry staleness
+const [row] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_custom_post_types")).limit(1);
+const rawTypes: any[] = row?.value ? JSON.parse(row.value) : [];
+
+// Normalise: support both flat { key, label, pluralLabel } and nested { key, config: {...} }
+const customTypes = rawTypes.map((t: any) => ({
+  slug: t.key,
+  config: t.config ? { ...t.config } : {
+    label: t.label ?? t.key,
+    pluralLabel: t.pluralLabel ?? t.key,
+    description: t.description ?? "",
+    icon: t.icon ?? "folder",
+    showInMenu: t.showInMenu ?? true,
+    supports: t.supports ?? ["title","editor","excerpt"],
+    custom: true,
+  },
+}));
 
 const editingType = editing ? customTypes.find(t => t.slug === editing) : null;
 

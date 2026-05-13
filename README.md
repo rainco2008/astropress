@@ -4,7 +4,7 @@ A fully open-source, WordPress-compatible CMS built on Astro — deployable to C
 
 No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and Cloudflare's infrastructure.
 
-[![Deploy to Cloudflare Pages](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/astropress-cms/astropress)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/astropress-cms/astropress)
 
 ---
 
@@ -245,7 +245,52 @@ Form entries are viewable in **Forms → Entries**.
 
 ## Deploy to Cloudflare
 
-### 1. Create Cloudflare resources
+### One-click deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/astropress-cms/astropress)
+
+Clicking the button will:
+
+1. Fork this repo to your GitHub account
+2. Create a Cloudflare Pages project linked to the fork
+3. Prompt you to authorise Cloudflare to access your GitHub account
+4. Set up the CI/CD pipeline — every push to `main` triggers a build and deploy
+
+**What you need before clicking:**
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
+- A GitHub account
+
+**After the fork is created**, finish the setup in two minutes:
+
+```bash
+# 1. Clone your fork
+git clone https://github.com/<your-username>/astropress
+cd astropress
+
+# 2. Create a D1 database and R2 bucket
+npx wrangler d1 create astropress
+npx wrangler r2 bucket create astropress-media
+
+# 3. Paste the database_id into both wrangler configs
+#    apps/admin/wrangler.toml  →  [[d1_databases]] database_id = "..."
+#    apps/web/wrangler.toml    →  [[d1_databases]] database_id = "..."
+
+# 4. Run migrations against production D1
+npx wrangler d1 execute astropress --remote --file=./migrations/0001_init.sql
+
+# 5. Push — GitHub Actions deploys both apps automatically
+git push
+```
+
+Your admin will be live at the Cloudflare Pages URL shown in the dashboard.
+
+---
+
+### Manual deploy (CLI only)
+
+If you prefer not to use the button:
+
+#### 1. Create Cloudflare resources
 
 ```bash
 npx wrangler d1 create astropress
@@ -254,20 +299,20 @@ npx wrangler pages project create astropress-admin
 npx wrangler pages project create astropress-web
 ```
 
-### 2. Update wrangler configs
+#### 2. Update wrangler configs
 
 In `apps/admin/wrangler.toml` and `apps/web/wrangler.toml`:
 - Replace `database_id` with your D1 database ID
 - Set `SITE_URL` to your Pages URL
 
-### 3. Add GitHub secrets
+#### 3. Add GitHub secrets
 
 | Secret | Value |
 |--------|-------|
 | `CLOUDFLARE_API_TOKEN` | API token with Pages + D1 + R2 permissions |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID |
 
-### 4. Push to `main`
+#### 4. Push to `main`
 
 GitHub Actions builds both apps, runs D1 migrations, and deploys to Cloudflare Pages automatically.
 

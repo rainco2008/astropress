@@ -42,7 +42,6 @@ if (!post) return Astro.redirect("/admin/pages");
         <BlockEditor
           client:only="react"
           initialContent={post.content}
-          onChange={(content: string) => { (window as any).__editorContent = content; }}
           postId={id}
         />
       </div>
@@ -69,67 +68,73 @@ if (!post) return Astro.redirect("/admin/pages");
     </aside>
   </div>
 
-  <script define:vars={{ postId: id, initialSlug: post.slug }}>
-    let currentSlug = initialSlug;
-    let slugLocked = false;
+  <div id="page-meta" data-post-id={id} data-initial-slug={post.slug} style="display:none"></div>
+  <script is:inline>
+    (function() {
+      var meta = document.getElementById("page-meta");
+      var postId = Number(meta.dataset.postId);
+      var initialSlug = meta.dataset.initialSlug || "";
+      var currentSlug = initialSlug;
+      var slugLocked = false;
 
-    function slugify(s) { return s.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_]+/g,"-").replace(/^-+|-+$/g,""); }
+      function slugify(s) { return s.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_]+/g,"-").replace(/^-+|-+$/g,""); }
 
-    function setPermalinkDisplay(slug) {
-      const link = document.getElementById("permalink-link");
-      if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
-      const input = document.getElementById("post-slug");
-      if (input) input.value = slug;
-      currentSlug = slug;
-    }
-
-    function updateSlug(t) {
-      if (slugLocked) return;
-      const preview = slugify(t);
-      const link = document.getElementById("permalink-link");
-      if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
-    }
-
-    function startEditSlug() {
-      const input = document.getElementById("post-slug");
-      if (!input.value) input.value = slugify(document.getElementById("post-title").value);
-      document.getElementById("permalink-view").style.display = "none";
-      document.getElementById("permalink-edit").style.display = "inline-flex";
-      input.focus(); input.select();
-    }
-
-    function confirmSlug() {
-      const raw = document.getElementById("post-slug").value.trim();
-      const newSlug = raw ? slugify(raw) || raw.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
-      slugLocked = !!newSlug;
-      setPermalinkDisplay(newSlug);
-      document.getElementById("permalink-edit").style.display = "none";
-      document.getElementById("permalink-view").style.display = "inline-flex";
-    }
-
-    function cancelEditSlug() {
-      document.getElementById("post-slug").value = currentSlug;
-      document.getElementById("permalink-edit").style.display = "none";
-      document.getElementById("permalink-view").style.display = "inline-flex";
-    }
-
-    async function savePost(forceStatus) {
-      const title = document.getElementById("post-title").value;
-      const status = forceStatus || document.getElementById("post-status").value;
-      const slug = document.getElementById("post-slug").value.trim() || slugify(title);
-      const content = window.__editorContent ?? "";
-      document.getElementById("save-status").textContent = "Saving…";
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, status, slug }),
-      });
-      if (res.ok) {
-        if (!slugLocked) setPermalinkDisplay(slug);
-        document.getElementById("save-status").textContent = "Saved ✓";
-        setTimeout(() => document.getElementById("save-status").textContent = "", 3000);
-      } else {
-        document.getElementById("save-status").textContent = "Error";
+      function setPermalinkDisplay(slug) {
+        var link = document.getElementById("permalink-link");
+        if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
+        var input = document.getElementById("post-slug");
+        if (input) input.value = slug;
+        currentSlug = slug;
       }
-    }
+
+      window.updateSlug = function(t) {
+        if (slugLocked) return;
+        var preview = slugify(t);
+        var link = document.getElementById("permalink-link");
+        if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
+      };
+
+      window.startEditSlug = function() {
+        var input = document.getElementById("post-slug");
+        if (!input.value) input.value = slugify(document.getElementById("post-title").value);
+        document.getElementById("permalink-view").style.display = "none";
+        document.getElementById("permalink-edit").style.display = "inline-flex";
+        input.focus(); input.select();
+      };
+
+      window.confirmSlug = function() {
+        var raw = document.getElementById("post-slug").value.trim();
+        var newSlug = raw ? slugify(raw) || raw.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
+        slugLocked = !!newSlug;
+        setPermalinkDisplay(newSlug);
+        document.getElementById("permalink-edit").style.display = "none";
+        document.getElementById("permalink-view").style.display = "inline-flex";
+      };
+
+      window.cancelEditSlug = function() {
+        document.getElementById("post-slug").value = currentSlug;
+        document.getElementById("permalink-edit").style.display = "none";
+        document.getElementById("permalink-view").style.display = "inline-flex";
+      };
+
+      window.savePost = async function(forceStatus) {
+        var title = document.getElementById("post-title").value;
+        var status = forceStatus || document.getElementById("post-status").value;
+        var slug = document.getElementById("post-slug").value.trim() || slugify(title);
+        var content = window.__editorContent ?? "";
+        document.getElementById("save-status").textContent = "Saving…";
+        var res = await fetch("/api/posts/" + postId, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content, status, slug }),
+        });
+        if (res.ok) {
+          if (!slugLocked) setPermalinkDisplay(slug);
+          document.getElementById("save-status").textContent = "Saved ✓";
+          setTimeout(function() { document.getElementById("save-status").textContent = ""; }, 3000);
+        } else {
+          document.getElementById("save-status").textContent = "Error";
+        }
+      };
+    })();
   </script>
 </AdminLayout>

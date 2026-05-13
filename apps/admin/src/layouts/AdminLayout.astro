@@ -1,7 +1,8 @@
 ---
-import { getPostTypes } from "@astropress/core/registry";
 import { adminIcons } from "../lib/icons";
 import AIWidget from "../islands/AIWidget";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
 
 interface Props {
   title?: string;
@@ -11,9 +12,22 @@ interface Props {
 
 const { title = "AstroPress Admin", pageContext = {} } = Astro.props;
 const user = Astro.locals.user;
+const db = Astro.locals.db;
 const currentPath = new URL(Astro.request.url).pathname;
 
-const postTypes = getPostTypes().filter((pt) => pt.config.showInMenu);
+// Load custom post types directly from DB — avoids registry state issues
+interface CPTEntry { key: string; label?: string; pluralLabel?: string; showInMenu?: boolean; icon?: string; config?: { label?: string; pluralLabel?: string; showInMenu?: boolean; icon?: string } }
+let customPostTypes: CPTEntry[] = [];
+if (db) {
+  try {
+    const [row] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_custom_post_types")).limit(1);
+    if (row?.value) customPostTypes = JSON.parse(row.value) as CPTEntry[];
+  } catch {}
+}
+// Normalise: support both flat { key, pluralLabel, showInMenu } and nested { key, config: { pluralLabel, showInMenu } }
+const customMenuTypes = customPostTypes
+  .map((t) => ({ key: t.key, pluralLabel: t.config?.pluralLabel ?? t.pluralLabel ?? t.key, showInMenu: t.config?.showInMenu ?? t.showInMenu }))
+  .filter((t) => t.showInMenu !== false);
 
 const icons = adminIcons;
 ---
@@ -349,19 +363,18 @@ const icons = adminIcons;
 
           <div class="wp-sidebar-sep"></div>
           <div class="wp-sidebar-section">Content</div>
-          {postTypes.map((pt) => {
-            const href = pt.slug === "post" ? "/admin/posts" : `/admin/cpt/${pt.slug}`;
-            const active = pt.slug === "post"
-              ? currentPath.startsWith("/admin/posts")
-              : currentPath.startsWith(`/admin/cpt/${pt.slug}`);
-            const icon = pt.slug === "post" ? icons.post : pt.slug === "page" ? icons.page : icons.folder;
-            return (
-              <a href={href} class={active ? "is-active" : ""}>
-                <Fragment set:html={icon} />
-                {pt.config.pluralLabel}
-              </a>
-            );
-          })}
+          <a href="/admin/posts" class={currentPath.startsWith("/admin/posts") ? "is-active" : ""}>
+            <Fragment set:html={icons.post} /> Posts
+          </a>
+          <a href="/admin/pages" class={currentPath.startsWith("/admin/pages") ? "is-active" : ""}>
+            <Fragment set:html={icons.page} /> Pages
+          </a>
+          {customMenuTypes.map((pt) => (
+            <a href={`/admin/cpt/${pt.key}`} class={currentPath.startsWith(`/admin/cpt/${pt.key}`) ? "is-active" : ""}>
+              <Fragment set:html={icons.folder} />
+              {pt.pluralLabel}
+            </a>
+          ))}
           <a href="/admin/forms" class={currentPath.startsWith("/admin/forms") ? "is-active" : ""}>
             <Fragment set:html={icons.forms} /> Forms
           </a>
@@ -380,6 +393,9 @@ const icons = adminIcons;
 
           <div class="wp-sidebar-sep"></div>
           <div class="wp-sidebar-section">Site</div>
+          <a href="/admin/users" class={currentPath.startsWith("/admin/users") ? "is-active" : ""}>
+            <Fragment set:html={icons.users} /> Users
+          </a>
           <a href="/admin/plugins" class={currentPath.startsWith("/admin/plugins") ? "is-active" : ""}>
             <Fragment set:html={icons.plugins} /> Plugins
           </a>

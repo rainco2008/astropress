@@ -39,9 +39,14 @@ async function loadCustomTypes(db: Awaited<ReturnType<typeof createLocalDb>>) {
       .where(eq(wpOptions.optionName, "astropress_custom_post_types"));
     const ptRow = rows[0];
     if (ptRow?.value) {
-      const types = JSON.parse(ptRow.value) as Array<{ key: string } & Record<string, unknown>>;
+      const types = JSON.parse(ptRow.value) as Array<{ key: string; config?: Record<string, unknown> } & Record<string, unknown>>;
       for (const t of types) {
-        if (!getPostType(t.key)) registerPostType(t.key, { ...t, custom: true } as any);
+        if (!getPostType(t.key)) {
+          // Support both storage formats: nested { key, config:{} } and flat { key, label, ... }
+          const cfg = t.config ?? t;
+          const { key: _k, ...rest } = cfg as any;
+          registerPostType(t.key, { ...rest, custom: true } as any);
+        }
       }
     }
   } catch {}
