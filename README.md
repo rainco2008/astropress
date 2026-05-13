@@ -4,7 +4,7 @@ A fully open-source, WordPress-compatible CMS built on Astro — deployable to C
 
 No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and Cloudflare's infrastructure.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/astropress-cms/astropress)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
 
 ---
 
@@ -79,7 +79,7 @@ astropress/
 ### 1. Install dependencies
 
 ```bash
-git clone https://github.com/astropress-cms/astropress
+git clone https://github.com/awsmin/AstroPress
 cd astropress
 pnpm install
 ```
@@ -247,7 +247,7 @@ Form entries are viewable in **Forms → Entries**.
 
 ### One-click deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/astropress-cms/astropress)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
 
 Clicking the button will:
 

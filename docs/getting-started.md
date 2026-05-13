@@ -10,7 +10,7 @@
 ## 1. Clone and install
 
 ```bash
-git clone https://github.com/astropress-cms/astropress
+git clone https://github.com/awsmin/AstroPress
 cd astropress
 pnpm install
 ```

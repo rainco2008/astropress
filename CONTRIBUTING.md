@@ -5,7 +5,7 @@ Thanks for your interest! Here's how to get set up.
 ## Local Setup
 
 ```bash
-git clone https://github.com/astropress-cms/astropress
+git clone https://github.com/awsmin/AstroPress
 cd astropress
 pnpm install
 cp .env.example .env          # fill in values
