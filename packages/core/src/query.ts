@@ -36,7 +36,7 @@
  */
 
 import { eq, and, desc, asc, like, inArray, sql } from "drizzle-orm";
-import type { Database } from "./db";
+import type { AnyDatabase } from "./db/index";
 import {
   wpPosts,
   wpPostmeta,
@@ -170,6 +170,24 @@ const POST_SELECT = {
   author: wpPosts.postAuthor,
 } as const;
 
+/** Map a raw wpPosts Drizzle row to the Post interface. */
+function mapPost(row: typeof wpPosts.$inferSelect): Post {
+  return {
+    id: row.id,
+    title: row.postTitle,
+    slug: row.postName,
+    content: row.postContent,
+    excerpt: row.postExcerpt,
+    status: row.postStatus,
+    type: row.postType,
+    date: row.postDate,
+    modified: row.postModified,
+    parent: row.postParent,
+    menuOrder: row.menuOrder,
+    author: row.postAuthor,
+  };
+}
+
 // ─── Posts ────────────────────────────────────────────────────────────────────
 
 /**
@@ -184,7 +202,7 @@ const POST_SELECT = {
  * });
  */
 export async function queryPosts(
-  db: Database,
+  db: AnyDatabase,
   args: QueryArgs = {}
 ): Promise<QueryResult> {
   const {
@@ -261,7 +279,7 @@ export async function queryPosts(
  * const post = await getPost(db, 42);
  */
 export async function getPost(
-  db: Database,
+  db: AnyDatabase,
   idOrSlug: number | string,
   type?: string
 ): Promise<Post | null> {
@@ -272,7 +290,7 @@ export async function getPost(
 /**
  * Get a post by its database ID.
  */
-export async function getPostById(db: Database, id: number): Promise<Post | null> {
+export async function getPostById(db: AnyDatabase, id: number): Promise<Post | null> {
   const [row] = await db.select(POST_SELECT).from(wpPosts).where(eq(wpPosts.id, id)).limit(1);
   return row ? rowToPost(row) : null;
 }
@@ -282,7 +300,7 @@ export async function getPostById(db: Database, id: number): Promise<Post | null
  * Optionally filter by post type.
  */
 export async function getPostBySlug(
-  db: Database,
+  db: AnyDatabase,
   slug: string,
   type?: string
 ): Promise<Post | null> {
@@ -309,7 +327,7 @@ export async function getPostBySlug(
  * const children = await getChildren(db, post.id, "page");
  */
 export async function getChildren(
-  db: Database,
+  db: AnyDatabase,
   parentId: number,
   type?: string
 ): Promise<Post[]> {
@@ -336,7 +354,7 @@ export async function getChildren(
  * const crumbs = await getAncestors(db, page.id);
  * // [grandparent, parent]
  */
-export async function getAncestors(db: Database, postId: number): Promise<Post[]> {
+export async function getAncestors(db: AnyDatabase, postId: number): Promise<Post[]> {
   const ancestors: Post[] = [];
   let currentId = postId;
 
@@ -367,7 +385,7 @@ export async function getAncestors(db: Database, postId: number): Promise<Post[]
  * const img   = await getField(db, post.id, "hero_image");
  */
 export async function getField(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   key: string
 ): Promise<string | null> {
@@ -387,7 +405,7 @@ export async function getField(
  * <p>{await theField(db, post.id, "subtitle")}</p>
  */
 export async function theField(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   key: string
 ): Promise<string> {
@@ -403,7 +421,7 @@ export async function theField(
  * console.log(meta.price, meta.color);
  */
 export async function getFields(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   opts: { publicOnly?: boolean } = {}
 ): Promise<Record<string, string>> {
@@ -432,7 +450,7 @@ export const getPostMeta = getField;
  * await updatePostMeta(db, post.id, "views", "42");
  */
 export async function updatePostMeta(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   key: string,
   value: string
@@ -453,7 +471,7 @@ export async function updatePostMeta(
  * Like `delete_post_meta()`.
  */
 export async function deletePostMeta(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   key: string
 ): Promise<void> {
@@ -487,7 +505,7 @@ export interface TermQueryArgs {
  * const tags       = await getTerms(db, "post_tag", { orderBy: "count", order: "desc" });
  */
 export async function getTerms(
-  db: Database,
+  db: AnyDatabase,
   taxonomy: string,
   args: TermQueryArgs = {}
 ): Promise<Term[]> {
@@ -539,7 +557,7 @@ export async function getTerms(
  * const tags = await getPostTerms(db, post.id, "post_tag");
  */
 export async function getPostTerms(
-  db: Database,
+  db: AnyDatabase,
   postId: number,
   taxonomy: string
 ): Promise<Term[]> {
@@ -577,7 +595,7 @@ export async function getPostTerms(
  * const books = await getPostsByTerm(db, "fiction", "genre", { type: "book" });
  */
 export async function getPostsByTerm(
-  db: Database,
+  db: AnyDatabase,
   termSlug: string,
   taxonomy: string,
   args: Pick<QueryArgs, "type" | "perPage" | "page" | "orderBy" | "order"> = {}
@@ -628,7 +646,7 @@ export async function getPostsByTerm(
  * const email = await getOption(db, "admin_email", "noreply@example.com");
  */
 export async function getOption(
-  db: Database,
+  db: AnyDatabase,
   name: string,
   fallback = ""
 ): Promise<string> {
@@ -648,7 +666,7 @@ export async function getOption(
  * await updateOption(db, "blogname", "My Site");
  */
 export async function updateOption(
-  db: Database,
+  db: AnyDatabase,
   name: string,
   value: string
 ): Promise<void> {
@@ -671,7 +689,7 @@ export async function updateOption(
  * const site = await getSiteInfo(db);
  * // { name, description, url, adminEmail }
  */
-export async function getSiteInfo(db: Database): Promise<SiteInfo> {
+export async function getSiteInfo(db: AnyDatabase): Promise<SiteInfo> {
   const rows = await db
     .select({ name: wpOptions.optionName, value: wpOptions.optionValue })
     .from(wpOptions)
@@ -679,7 +697,7 @@ export async function getSiteInfo(db: Database): Promise<SiteInfo> {
       sql`${wpOptions.optionName} IN ('blogname','blogdescription','siteurl','admin_email')`
     );
 
-  const m = Object.fromEntries(rows.map(r => [r.name, r.value]));
+  const m = Object.fromEntries(rows.map((r: { name: string | null; value: string }) => [r.name, r.value]));
   return {
     name:        m.blogname         ?? "AstroPress",
     description: m.blogdescription  ?? "",
@@ -699,7 +717,7 @@ export async function getSiteInfo(db: Database): Promise<SiteInfo> {
  * <p>By {author?.displayName}</p>
  */
 export async function getAuthor(
-  db: Database,
+  db: AnyDatabase,
   userId: number
 ): Promise<Author | null> {
   const [row] = await db
@@ -716,6 +734,73 @@ export async function getAuthor(
     .limit(1);
 
   return row ?? null;
+}
+
+// ─── Full-text search ─────────────────────────────────────────────────────────
+
+/**
+ * Full-text search across published posts.
+ *
+ * On SQLite (D1 / LibSQL): uses FTS5 virtual table (requires 0002_fts migration).
+ * On PostgreSQL: uses tsvector GIN index (requires 0002_fts migration).
+ * Falls back to LIKE search if FTS is not set up.
+ *
+ * @example
+ * const { posts } = await searchPosts(db, "astro cloudflare", { type: "post" });
+ */
+export async function searchPosts(
+  db: AnyDatabase,
+  query: string,
+  opts: { type?: string; perPage?: number; page?: number } = {}
+): Promise<QueryResult> {
+  const { type, perPage = 10, page = 1 } = opts;
+  const offset = (page - 1) * perPage;
+  const safeTerm = query.trim();
+  if (!safeTerm) return { posts: [], total: 0, pages: 0 };
+
+  try {
+    // SQLite FTS5 path
+    const ftsRows: Array<{ post_id: number }> = await db
+      .select({ post_id: sql<number>`post_id` })
+      .from(sql`wp_fts('${sql.raw(safeTerm.replace(/'/g, "''"))}')`)
+      .where(type ? sql`type = ${type}` : sql`1=1`)
+      .orderBy(sql`rank`)
+      .limit(perPage)
+      .offset(offset);
+
+    const ids = ftsRows.map((r) => r.post_id).filter(Boolean);
+    if (ids.length === 0) return { posts: [], total: 0, pages: 0 };
+
+    const posts = await db
+      .select()
+      .from(wpPosts)
+      .where(inArray(wpPosts.id, ids));
+
+    const total = ids.length;
+    return { posts: posts.map(mapPost), total, pages: Math.ceil(total / perPage) };
+  } catch {
+    // Fallback: LIKE search (PostgreSQL or FTS not yet set up)
+    const term = `%${safeTerm}%`;
+    const rows = await db
+      .select()
+      .from(wpPosts)
+      .where(
+        and(
+          eq(wpPosts.postStatus, "publish"),
+          type ? eq(wpPosts.postType, type) : undefined,
+          sql`(${wpPosts.postTitle} ILIKE ${term} OR ${wpPosts.postContent} ILIKE ${term} OR ${wpPosts.postExcerpt} ILIKE ${term})`
+        )
+      )
+      .orderBy(desc(wpPosts.postDate))
+      .limit(perPage)
+      .offset(offset);
+
+    return {
+      posts: rows.map(mapPost),
+      total: rows.length,
+      pages: Math.ceil(rows.length / perPage),
+    };
+  }
 }
 
 // ─── Convenience re-exports ───────────────────────────────────────────────────

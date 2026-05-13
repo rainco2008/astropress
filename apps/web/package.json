@@ -9,9 +9,10 @@
     "typecheck": "astro check"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^11.2.0",
+    "@astrojs/node": "^8.0.0",
     "@astropress/core": "workspace:*",
     "@astropress/theme-default": "workspace:*",
-    "@astrojs/node": "^8.0.0",
     "@libsql/client": "^0.14.0",
     "astro": "^4.0.0",
     "drizzle-orm": "^0.36.0"

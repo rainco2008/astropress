@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { createLocalDb } from "@astropress/core";
+import { createDatabase, createD1Database } from "@astropress/core";
 import { createAuth, type Auth } from "@astropress/auth";
 import { wpOptions } from "@astropress/core/schema";
 import { eq } from "drizzle-orm";
@@ -18,18 +18,29 @@ function isPublicFormApi(pathname: string, method: string): boolean {
   return !!m;
 }
 
-const DB_URL = import.meta.env.DATABASE_URL ?? "file:./local.db";
+// Database URL: integration config → env var → sensible default (no .env needed)
+let _dbUrl: string | null = null;
+async function getDbUrl(): Promise<string> {
+  if (_dbUrl) return _dbUrl;
+  try {
+    const { database } = await import("virtual:astropress/config");
+    if (database?.url) { _dbUrl = database.url; return _dbUrl!; }
+  } catch { /* virtual module not set up yet */ }
+  _dbUrl = import.meta.env.DATABASE_URL ?? "file:./local.db";
+  return _dbUrl!;
+}
 
-// Singleton DB connection (re-used across requests in dev)
-let _db: Awaited<ReturnType<typeof createLocalDb>> | null = null;
-async function getDb() {
-  if (!_db) _db = await createLocalDb(DB_URL);
-  return _db;
+// Singleton local DB connection (re-used across requests in the same process)
+let _localDb: Awaited<ReturnType<typeof createDatabase>> | null = null;
+async function getLocalDb() {
+  if (!_localDb) _localDb = await createDatabase(await getDbUrl());
+  return _localDb;
 }
 
 // Load custom post types/taxonomies from DB into registry (once per process)
 let _customTypesLoaded = false;
-async function loadCustomTypes(db: Awaited<ReturnType<typeof createLocalDb>>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadCustomTypes(db: any) {
   if (_customTypesLoaded) return;
   _customTypesLoaded = true;
   try {
@@ -82,7 +93,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   bootstrapPlugins();
 
   const { pathname } = new URL(context.request.url);
-  const db = await getDb();
+
+  // In dev mode always use local DB — never touch D1 (avoids empty local D1 simulation).
+  // In production, prefer D1 binding if present (Cloudflare Pages).
+  const d1 = !import.meta.env.DEV
+    ? (context.locals as any).runtime?.env?.DB as D1Database | undefined
+    : undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db: any = d1 ? createD1Database(d1) : await getLocalDb();
   context.locals.db = db;
   await loadCustomTypes(db);
 

@@ -9,6 +9,7 @@
     "typecheck": "astro check"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^11.2.0",
     "@astrojs/node": "^8.0.0",
     "@astrojs/react": "^3.0.0",
     "@astropress/api": "workspace:*",
