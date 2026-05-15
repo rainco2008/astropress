@@ -1,0 +1,93 @@
+---
+import { wpOptions, wpPosts } from "@astropress/core/schema";
+import { eq, and } from "drizzle-orm";
+import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
+import ThemeEditor from "../../../../islands/ThemeEditor";
+
+const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect("/admin/themes");
+
+const isTemplate = slug === "__header__" || slug === "__footer__";
+const templatePart = slug === "__header__" ? "header" : slug === "__footer__" ? "footer" : undefined;
+
+let pageTitle = slug;
+if (!isTemplate) {
+  const [page] = await db
+    .select({ title: wpPosts.postTitle })
+    .from(wpPosts)
+    .where(and(eq(wpPosts.postName, slug), eq(wpPosts.postType, "page")))
+    .limit(1);
+  if (!page && !isTemplate) return Astro.redirect("/admin/themes");
+  pageTitle = page?.title ?? slug;
+}
+
+// Load block schema
+const schemaKey = isTemplate
+  ? (slug === "__header__" ? "astropress_page_schema___header__" : "astropress_page_schema___footer__")
+  : `astropress_page_schema_${slug}`;
+
+const [schemaRow] = await db
+  .select({ value: wpOptions.optionValue })
+  .from(wpOptions)
+  .where(eq(wpOptions.optionName, schemaKey))
+  .limit(1);
+
+const schema = schemaRow?.value ? JSON.parse(schemaRow.value) : { version: 1, blocks: [] };
+
+// Load theme tokens
+const [tokenRow] = await db
+  .select({ value: wpOptions.optionValue })
+  .from(wpOptions)
+  .where(eq(wpOptions.optionName, "astropress_theme_config"))
+  .limit(1);
+
+const tokens = tokenRow?.value ? JSON.parse(tokenRow.value) : DEFAULT_THEME_TOKENS;
+
+// Load available forms for form block
+const [formsRow] = await db
+  .select({ value: wpOptions.optionValue })
+  .from(wpOptions)
+  .where(eq(wpOptions.optionName, "astropress_forms"))
+  .limit(1);
+
+const rawForms: any[] = formsRow?.value ? JSON.parse(formsRow.value) : [];
+const forms = rawForms.map((f: any) => ({
+  id: String(f.id),
+  title: String(f.title ?? f.name ?? "Untitled Form"),
+  fieldCount: (f.fields ?? []).filter((field: any) => !["page_break", "section_divider", "html"].includes(field.type)).length,
+}));
+
+const displayTitle = isTemplate
+  ? (templatePart === "header" ? "Header Template" : "Footer Template")
+  : pageTitle;
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Editing: {displayTitle} — AstroPress</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      #editor-root { height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="editor-root">
+      <ThemeEditor
+        client:only="react"
+        slug={slug}
+        pageTitle={displayTitle}
+        initialBlocks={schema.blocks}
+        initialTokens={tokens}
+        forms={forms}
+        isTemplate={isTemplate}
+        templatePart={templatePart}
+      />
+    </div>
+  </body>
+</html>

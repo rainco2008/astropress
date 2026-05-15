@@ -1,0 +1,168 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
+import type { Theme } from "@astropress/core/types/theme";
+
+const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
+// Load themes
+const [themesRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_themes")).limit(1);
+const [activeRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_active_theme")).limit(1);
+
+let themes: Theme[] = themesRow?.value ? JSON.parse(themesRow.value) : [];
+
+// Bootstrap default theme if none
+if (themes.length === 0) {
+  const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
+  themes = [{
+    id: "default",
+    name: "Default",
+    description: "The default AstroPress theme",
+    tokens: tokenRow?.value ? JSON.parse(tokenRow.value) : DEFAULT_THEME_TOKENS,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }];
+}
+
+const activeThemeId = activeRow?.value ?? themes[0]?.id ?? "default";
+
+const allSchemaRows = await db.select({ name: wpOptions.optionName }).from(wpOptions).where(eq(wpOptions.autoload, "no"));
+const hasHeaderSchema = allSchemaRows.some(r => r.name === "astropress_page_schema___header__");
+const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_schema___footer__");
+---
+<AdminLayout title="Themes">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 class="wp-heading-inline" style="margin:0">Themes</h1>
+    <button onclick="document.getElementById('new-theme-modal').style.display='flex'" class="button button-primary">Add New Theme</button>
+  </div>
+  <hr class="wp-header-end" />
+
+  <!-- Theme Gallery -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-bottom:40px">
+
+    {themes.map((theme) => {
+      const isActive = theme.id === activeThemeId;
+      const c = theme.tokens.colors;
+      return (
+        <div data-theme-id={theme.id} style={`border-radius:6px;overflow:hidden;border:${isActive ? "3px solid #2271b1" : "1px solid #dcdcde"};background:#fff;position:relative`}>
+          {isActive && (
+            <div style="position:absolute;top:10px;left:10px;background:#2271b1;color:#fff;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;letter-spacing:0.3px;z-index:1">Active</div>
+          )}
+          <!-- Color swatch preview -->
+          <div style="height:120px;display:grid;grid-template-columns:repeat(7,1fr);gap:0">
+            {[c.primary, c.secondary, c.background, c.surface, c.text, c.textMuted, c.border].map((color) => (
+              <div style={`background:${color}`}></div>
+            ))}
+          </div>
+          <!-- Font preview -->
+          <div style={`padding:12px 14px;background:${c.background};border-bottom:1px solid ${c.border}`}>
+            <div style={`font-family:${theme.tokens.fonts.heading};font-size:15px;font-weight:700;color:${c.text}`}>{theme.name}</div>
+            <div style={`font-family:${theme.tokens.fonts.body};font-size:12px;color:${c.textMuted};margin-top:2px`}>{theme.description || "No description"}</div>
+          </div>
+          <!-- Actions -->
+          <div style="padding:10px 14px;background:#f6f7f7;display:flex;gap:6px;flex-wrap:wrap">
+            <a href={`/admin/themes/customize/${theme.id}`} class="button button-small">Customize</a>
+            {!isActive && (
+              <button onclick={`activateTheme('${theme.id}')`} class="button button-small button-primary">Activate</button>
+            )}
+            {!isActive && (
+              <button onclick={`deleteTheme('${theme.id}')`} class="button button-small" style="color:#d63638;border-color:#d63638;margin-left:auto">Delete</button>
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+
+  <!-- Site Editor (FSE) -->
+  <h2 style="font-size:16px;font-weight:600;margin:0 0 8px;color:#1d2327">Site Editor</h2>
+  <p style="color:#646970;font-size:13px;margin:0 0 16px">Edit your site's header and footer with the visual block editor.</p>
+  <div style="display:flex;gap:12px;margin-bottom:40px">
+    <a href="/admin/themes/edit/__header__" class="button" style={hasHeaderSchema ? "border-color:#2271b1;color:#2271b1" : ""}>
+      {hasHeaderSchema ? "Edit Header" : "Design Header"}
+    </a>
+    <a href="/admin/themes/edit/__footer__" class="button" style={hasFooterSchema ? "border-color:#2271b1;color:#2271b1" : ""}>
+      {hasFooterSchema ? "Edit Footer" : "Design Footer"}
+    </a>
+  </div>
+
+  <!-- New Theme Modal -->
+  <div id="new-theme-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:9999">
+    <div style="background:#fff;border-radius:6px;padding:28px;width:440px;max-width:90vw">
+      <h2 style="margin:0 0 20px;font-size:18px">Create New Theme</h2>
+      <div style="margin-bottom:14px">
+        <label class="wp-form-label">Theme Name</label>
+        <input id="new-theme-name" type="text" class="wp-input" style="width:100%" placeholder="My Custom Theme" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="wp-form-label">Description</label>
+        <input id="new-theme-desc" type="text" class="wp-input" style="width:100%" placeholder="Optional description" />
+      </div>
+      <div style="margin-bottom:20px">
+        <label class="wp-form-label">Start from</label>
+        <select id="new-theme-clone" class="wp-input" style="width:100%">
+          <option value="">Blank (default tokens)</option>
+          {themes.map(t => <option value={t.id}>{t.name}</option>)}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('new-theme-modal').style.display='none'" class="button">Cancel</button>
+        <button onclick="createTheme()" class="button button-primary">Create Theme</button>
+      </div>
+    </div>
+  </div>
+
+</AdminLayout>
+
+<script is:inline>
+  (function () {
+    window.activateTheme = async function (id) {
+      if (!confirm('Activate this theme? It will apply to your live site immediately.')) return;
+      const res = await fetch('/api/themes/' + id, { method: 'POST' });
+      if (res.ok) location.reload();
+      else alert('Failed to activate theme');
+    };
+
+    window.deleteTheme = async function (id) {
+      if (!confirm('Delete this theme? This cannot be undone.')) return;
+      const res = await fetch('/api/themes/' + id, { method: 'DELETE' });
+      if (res.ok) location.reload();
+      else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete theme');
+      }
+    };
+
+    window.createTheme = async function () {
+      const name = document.getElementById('new-theme-name').value.trim();
+      if (!name) { alert('Theme name is required'); return; }
+      const desc = document.getElementById('new-theme-desc').value.trim();
+      const cloneId = document.getElementById('new-theme-clone').value;
+
+      let cloneFrom = null;
+      if (cloneId) {
+        // Get existing theme tokens to clone
+        const res = await fetch('/api/themes');
+        const data = await res.json();
+        const src = data.themes?.find(t => t.id === cloneId);
+        if (src) cloneFrom = src.tokens;
+      }
+
+      const res = await fetch('/api/themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc, cloneFrom }),
+      });
+      const data = await res.json();
+      if (res.ok && data.theme) {
+        window.location.href = '/admin/themes/customize/' + data.theme.id;
+      } else {
+        alert('Failed to create theme');
+      }
+    };
+  })();
+</script>

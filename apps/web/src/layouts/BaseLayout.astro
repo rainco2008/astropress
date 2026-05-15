@@ -1,14 +1,19 @@
 ---
 import { themeStyles } from "@astropress/theme-default";
 import { getSiteOptions, getNavMenu } from "../lib/query";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
+import type { ThemeTokens } from "@astropress/core/types/theme";
+import BlockRenderer from "../components/BlockRenderer.astro";
 
 interface Props {
   title?: string;
   description?: string;
+  fullWidth?: boolean; // skip site-wrapper on main content (used when blocks own layout)
 }
 
-const { title, description } = Astro.props;
-
+const { title, description, fullWidth = false } = Astro.props;
 const db = Astro.locals.db;
 
 const site = db
@@ -16,6 +21,35 @@ const site = db
   : { blogname: "AstroPress", blogdescription: "", siteurl: "" };
 
 const navItems = db ? await getNavMenu(db, "primary") : [];
+
+// Load FSE header/footer schemas
+let headerBlocks: any[] | null = null;
+let footerBlocks: any[] | null = null;
+let tokens: ThemeTokens = DEFAULT_THEME_TOKENS;
+let formsById: Record<string, any> = {};
+
+if (db) {
+  const [headerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_page_schema___header__")).limit(1);
+  if (headerRow?.value) {
+    const s = JSON.parse(headerRow.value);
+    if (s.blocks?.length > 0) headerBlocks = s.blocks;
+  }
+
+  const [footerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_page_schema___footer__")).limit(1);
+  if (footerRow?.value) {
+    const s = JSON.parse(footerRow.value);
+    if (s.blocks?.length > 0) footerBlocks = s.blocks;
+  }
+
+  const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
+  if (tokenRow?.value) tokens = JSON.parse(tokenRow.value);
+
+  const [formsRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_forms")).limit(1);
+  if (formsRow?.value) {
+    const allForms: any[] = JSON.parse(formsRow.value);
+    for (const f of allForms) formsById[String(f.id)] = f;
+  }
+}
 
 const pageTitle = title ? `${title} — ${site.blogname}` : site.blogname;
 const metaDesc = description || site.blogdescription;
@@ -30,40 +64,60 @@ const metaDesc = description || site.blogdescription;
     <style set:html={themeStyles} />
   </head>
   <body>
-    <header class="site-header">
-      <div class="site-wrapper">
-        <div class="site-branding">
-          <a href="/">{site.blogname}</a>
-          {site.blogdescription && (
-            <div class="site-description">{site.blogdescription}</div>
+    {headerBlocks ? (
+      <BlockRenderer
+        blocks={headerBlocks}
+        tokens={tokens}
+        navItems={navItems}
+        siteTitle={site.blogname}
+        siteTagline={site.blogdescription}
+        formsById={formsById}
+      />
+    ) : (
+      <header class="site-header">
+        <div class="site-wrapper">
+          <div class="site-branding">
+            <a href="/">{site.blogname}</a>
+            {site.blogdescription && <div class="site-description">{site.blogdescription}</div>}
+          </div>
+          {navItems.length > 0 && (
+            <nav aria-label="Primary navigation">
+              <ul class="site-nav">
+                {navItems.map((item) => (
+                  <li><a href={item.url}>{item.title}</a></li>
+                ))}
+              </ul>
+            </nav>
           )}
         </div>
-        {navItems.length > 0 && (
-          <nav aria-label="Primary navigation">
-            <ul class="site-nav">
-              {navItems.map((item) => (
-                <li>
-                  <a href={item.url}>{item.title}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
-      </div>
-    </header>
+      </header>
+    )}
 
     <main class="site-main">
-      <div class="site-wrapper">
+      {fullWidth ? (
         <slot />
-      </div>
+      ) : (
+        <div class="site-wrapper">
+          <slot />
+        </div>
+      )}
     </main>
 
-    <footer class="site-footer">
-      <div class="site-wrapper">
-        <p>
-          Proudly powered by <a href="https://github.com/awsmin/AstroPress">AstroPress</a>
-        </p>
-      </div>
-    </footer>
+    {footerBlocks ? (
+      <BlockRenderer
+        blocks={footerBlocks}
+        tokens={tokens}
+        navItems={navItems}
+        siteTitle={site.blogname}
+        siteTagline={site.blogdescription}
+        formsById={formsById}
+      />
+    ) : (
+      <footer class="site-footer">
+        <div class="site-wrapper">
+          <p>Proudly powered by <a href="https://github.com/awsmin/AstroPress">AstroPress</a></p>
+        </div>
+      </footer>
+    )}
   </body>
 </html>

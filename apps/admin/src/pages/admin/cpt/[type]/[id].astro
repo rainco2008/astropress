@@ -23,8 +23,28 @@ if (!post) return Astro.redirect(`/admin/cpt/${type}`);
 const panels = getSidebarPanels(type);
 const backUrl = `/admin/cpt/${type}`;
 const postTaxonomies = getTaxonomies().filter((t) => t.config.postTypes?.includes(type));
+const editorMode = Astro.url.searchParams.get("editor") ?? "classic";
+const isVisual = editorMode === "visual";
+// If visual mode, redirect to the visual editor by post slug or ID
+if (isVisual && post.slug) {
+  return Astro.redirect(`/admin/themes/edit/${post.slug}?backUrl=${encodeURIComponent(backUrl)}`);
+}
 ---
 <AdminLayout title={post.title || `Edit ${postTypeConfig.label}`}>
+
+  <!-- Editor mode switcher -->
+  <div style="display:flex;align-items:center;gap:0;margin-bottom:16px;border:1px solid #dcdcde;border-radius:4px;overflow:hidden;width:fit-content">
+    <a
+      href={`/admin/cpt/${type}/${id}?editor=classic`}
+      style={`padding:6px 16px;font-size:13px;font-weight:600;text-decoration:none;border-right:1px solid #dcdcde;${!isVisual ? "background:#2271b1;color:#fff" : "background:#f6f7f7;color:#1d2327"}`}
+    >Classic Editor</a>
+    <a
+      href={post.slug ? `/admin/themes/edit/${post.slug}?backUrl=${encodeURIComponent(backUrl)}` : `?editor=visual`}
+      title={!post.slug ? "Save the post with a title first to enable visual editing" : undefined}
+      style={`padding:6px 16px;font-size:13px;font-weight:600;text-decoration:none;${isVisual ? "background:#2271b1;color:#fff" : "background:#f6f7f7;color:#1d2327"}${!post.slug ? ";opacity:0.5;cursor:not-allowed" : ""}`}
+    >Visual Editor</a>
+  </div>
+
   <div id="editor-root"
     data-post-id={String(id)}
     data-initial-slug={post.slug ?? ""}
