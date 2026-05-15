@@ -381,14 +381,14 @@ const icons = adminIcons;
 
           <div class="wp-sidebar-sep"></div>
           <div class="wp-sidebar-section">Structure</div>
-          <a href="/admin/custom-fields" class={currentPath.startsWith("/admin/custom-fields") ? "is-active" : ""}>
-            <Fragment set:html={icons.fields} /> Custom Fields
-          </a>
           <a href="/admin/post-types" class={currentPath.startsWith("/admin/post-types") ? "is-active" : ""}>
             <Fragment set:html={icons.posttypes} /> Post Types
           </a>
           <a href="/admin/taxonomies" class={currentPath.startsWith("/admin/taxonomies") ? "is-active" : ""}>
             <Fragment set:html={icons.taxonomies} /> Taxonomies
+          </a>
+          <a href="/admin/custom-fields" class={currentPath.startsWith("/admin/custom-fields") ? "is-active" : ""}>
+            <Fragment set:html={icons.fields} /> Custom Fields
           </a>
 
           <div class="wp-sidebar-sep"></div>

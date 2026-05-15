@@ -63,6 +63,7 @@ export default function AISettings() {
   const [showKey, setShowKey] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
+  const [systemContext, setSystemContext] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testMessage, setTestMessage] = useState("");
@@ -81,6 +82,7 @@ export default function AISettings() {
             setApiKey("••••••••••••••••");
           }
         }
+        setSystemContext(data.systemContext ?? "");
       })
       .catch(() => {});
   }, []);
@@ -111,6 +113,7 @@ export default function AISettings() {
       const isMasked = /^•+$/.test(apiKey);
       const body = {
         activeProvider,
+        systemContext,
         providers: activeProvider === "none" ? {} : {
           [activeProvider]: {
             enabled: true,
@@ -324,6 +327,35 @@ export default function AISettings() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* System Context */}
+      <div style={{
+        background: "#fff", border: "1px solid #c3c4c7",
+        borderRadius: 3, padding: "24px 28px", marginBottom: 20,
+      }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#1d2327" }}>
+          AI Context &amp; Instructions
+        </h3>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#646970", lineHeight: 1.6 }}>
+          Everything you write here is prepended to every AI operation on this site — content generation, chat, block generation, and more. Use it to set the AI's persona, share company information, define brand voice, and list dos and don'ts.
+        </p>
+        <textarea
+          value={systemContext}
+          onChange={e => setSystemContext(e.target.value)}
+          rows={10}
+          placeholder={`Examples of what to include:\n\n• Company name, tagline, and industry\n• Target audience and tone of voice\n• Do's: always use inclusive language, cite sources, use metric units\n• Don'ts: never mention competitors, avoid jargon, don't make pricing claims\n• Brand keywords and preferred terminology\n• Any legal or compliance disclaimers to include`}
+          style={{
+            width: "100%", padding: "10px 12px",
+            border: "1px solid #8c8f94", borderRadius: 3,
+            fontSize: 13, fontFamily: "inherit", lineHeight: 1.6,
+            resize: "vertical", outline: "none", boxSizing: "border-box",
+            color: "#1d2327",
+          }}
+        />
+        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#8c8f94" }}>
+          This context is never shown to site visitors. It is sent to the AI provider on every request.
+        </p>
       </div>
 
       {/* Save */}

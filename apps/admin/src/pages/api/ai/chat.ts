@@ -51,7 +51,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 
-  const system = buildSystemPrompt(context);
+  const siteContext: string = settings.systemContext?.trim() ?? "";
+  const system = buildSystemPrompt(context, siteContext);
 
   try {
     let reply: string;
@@ -86,7 +87,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(context: Record<string, any>): string {
+function buildSystemPrompt(context: Record<string, any>, siteContext = ""): string {
   const contextStr = Object.entries(context)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
@@ -105,7 +106,7 @@ function buildSystemPrompt(context: Record<string, any>): string {
     .join("\n");
 
   return `You are AstroPress AI — a fully autonomous CMS assistant with complete control over this WordPress-compatible CMS. You act immediately; you never give instructions for the user to follow themselves.
-
+${siteContext ? `\n## Site Instructions & Context\n${siteContext}\n` : ""}
 ## Current Page Context
 ${contextStr || "(none)"}
 

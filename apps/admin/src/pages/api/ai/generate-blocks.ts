@@ -3,35 +3,81 @@ import { eq } from "drizzle-orm";
 import { wpOptions } from "@astropress/core/schema";
 
 const BLOCK_TYPES_DOC = `
-Available block types (use these in order of preference — prefer structured types over html):
+AVAILABLE BLOCK TYPES — always prefer these over "html". Use html ONLY when nothing else fits.
 
 1. hero      — Full-width banner. props: { heading, subtext, buttonText, buttonUrl, bgColor (hex), textColor (hex), align ("left"|"center"|"right"), height (px number) }
-2. text      — Rich text section. props: { content (HTML string), align ("left"|"center"|"right") }
+2. text      — Rich text section. props: { content (valid HTML string), align ("left"|"center"|"right") }
 3. cta       — Call-to-action band. props: { heading, text, buttonText, buttonUrl, bgColor (hex), textColor (hex) }
-4. features  — Feature grid. props: { heading, subtext, cols (2|3|4), items: [{ icon (emoji/symbol), title, text }] }
-5. columns   — Two-column layout. props: { leftContent (HTML), rightContent (HTML), gap ("2rem") }
-6. image     — Image with caption. props: { src (URL or ""), alt, caption, align ("left"|"center"|"right"), width ("normal"|"wide"|"full") }
-7. spacer    — Vertical gap. props: { height (px number) }
-8. divider   — Horizontal rule. props: { style ("solid"|"dashed"|"dotted"), color (hex), thickness (px number) }
-9. html      — Custom HTML (LAST RESORT only, when no structured type can satisfy the request). props: { content (raw HTML) }
+4. features  — Feature/benefit grid (pricing tiers, team members, service cards, testimonials, FAQ items, stats — use this for any repeating card layout). props: { heading, subtext, cols (2|3|4), items: [{ icon (single emoji/symbol), title, text }] }
+5. columns   — Two-column layout (text+image, side-by-side content, about sections). props: { leftContent (HTML), rightContent (HTML), gap ("2rem") }
+6. form      — Embedded form. props: { formId (string — see available forms below), formTitle (string) }
+7. image     — Image with optional caption. props: { src (URL or ""), alt, caption, align, width ("normal"|"wide"|"full") }
+8. spacer    — Vertical gap. props: { height (px number) }
+9. divider   — Horizontal rule. props: { style ("solid"|"dashed"|"dotted"), color (hex), thickness (px number) }
+10. html     — Raw HTML. USE ONLY when types 1–9 cannot satisfy the requirement. props: { content (raw HTML) }
 
-DO NOT use "html" if any of the above types (1–8) can represent the content.
+DECISION GUIDE:
+- Pricing tables → "features" block (cols: 3, each item = one tier)
+- Team/people sections → "features" block
+- Testimonials → "features" block
+- Stats / numbers → "features" block
+- Contact/newsletter/signup → "form" block using an available form ID
+- Side-by-side → "columns" block
+- Long article text → "text" block with rich HTML content
+- NEVER use "html" for layouts achievable with the above types
 `;
 
-const SYSTEM_PROMPT = `You are a web page block generator for AstroPress CMS.
+function buildSystemPrompt(formsSection: string, siteContext: string, single: boolean): string {
+  const base = `You are a web page block generator for AstroPress CMS.
 ${BLOCK_TYPES_DOC}
-Each block object must have exactly: { "id": "<8 random hex chars>", "type": "<block type>", "props": { ... } }
+${formsSection}
+Each block object must have exactly: { "id": "<8 random hex chars>", "type": "<one of the types above>", "props": { ... } }
 
 Rules:
-- Return ONLY a valid JSON array. No markdown fences, no explanation, no text outside the array.
-- Generate 3–8 blocks that logically fit the prompt (unless told to generate one).
-- Use realistic, compelling copy — never use placeholder text like "Lorem ipsum".
+- Return ONLY a valid JSON array. No markdown fences, no explanation, no surrounding text.
+- Generate 3–8 blocks that logically cover the prompt (unless generating a single block).
+- Use realistic, compelling copy — never placeholder text like "Lorem ipsum".
 - Choose colours that match the requested brand or style.
-- Landing pages should start with a hero block.`;
+- Landing pages should start with a hero block.
+- Prefer structured block types over html at all times.${siteContext ? `\n\n## Site Instructions & Context\n${siteContext}` : ""}`;
 
-const SINGLE_BLOCK_ADDENDUM = `
-IMPORTANT: Generate EXACTLY ONE block — the single block that best satisfies the request.
-Return a JSON array with exactly one element. Pick the most appropriate structured type; use "html" only if no other type fits.`;
+  if (single) return base + `\n\nIMPORTANT: Generate EXACTLY ONE block — the single block that best fits the request. Return a JSON array with exactly one element.`;
+  return base;
+}
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function makeContactForm(title: string): any {
+  return {
+    id: uid(),
+    title,
+    fields: [
+      { id: uid(), type: "name", label: "Name", required: true, placeholder: "", description: "", defaultValue: "", cssClass: "", hideLabel: false, conditionalLogic: false },
+      { id: uid(), type: "email", label: "Email", required: true, placeholder: "", description: "", defaultValue: "", cssClass: "", hideLabel: false, conditionalLogic: false },
+      { id: uid(), type: "textarea", label: "Message", required: false, placeholder: "", description: "", defaultValue: "", cssClass: "", hideLabel: false, conditionalLogic: false },
+    ],
+    settings: { submitText: "Send Message", submitProcessingText: "Sending…", submitAlign: "left", formClass: "", labelAlignment: "top", ajax: true, honeypot: true, requireLogin: false, requireLoginMessage: "", scheduleForm: false, scheduleStart: "", scheduleEnd: "", scheduleClosedMessage: "", limitEntries: false, limitEntriesCount: 0, limitEntriesMessage: "", storeEntries: true },
+    notifications: [],
+    confirmations: [{ id: uid(), name: "Default", active: true, type: "message", message: "Thank you! We'll be in touch soon.", redirectUrl: "", page: "", autoScroll: true, conditionalLogic: false }],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function makeNewsletterForm(title: string): any {
+  return {
+    id: uid(),
+    title,
+    fields: [
+      { id: uid(), type: "email", label: "Email Address", required: true, placeholder: "your@email.com", description: "", defaultValue: "", cssClass: "", hideLabel: false, conditionalLogic: false },
+    ],
+    settings: { submitText: "Subscribe", submitProcessingText: "Subscribing…", submitAlign: "left", formClass: "", labelAlignment: "top", ajax: true, honeypot: true, requireLogin: false, requireLoginMessage: "", scheduleForm: false, scheduleStart: "", scheduleEnd: "", scheduleClosedMessage: "", limitEntries: false, limitEntriesCount: 0, limitEntriesMessage: "", storeEntries: true },
+    notifications: [],
+    confirmations: [{ id: uid(), name: "Default", active: true, type: "message", message: "Thanks for subscribing!", redirectUrl: "", page: "", autoScroll: true, conditionalLogic: false }],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
@@ -45,8 +91,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     });
   }
 
-  const systemPrompt = singleBlock ? SYSTEM_PROMPT + SINGLE_BLOCK_ADDENDUM : SYSTEM_PROMPT;
-
+  // ── Load AI settings ──────────────────────────────────────────────────────
   const [settingsRow] = await db
     .select({ value: wpOptions.optionValue })
     .from(wpOptions)
@@ -71,6 +116,28 @@ export const POST: APIRoute = async ({ locals, request }) => {
     );
   }
 
+  // ── Load existing forms ───────────────────────────────────────────────────
+  const [formsRow] = await db
+    .select({ value: wpOptions.optionValue })
+    .from(wpOptions)
+    .where(eq(wpOptions.optionName, "astropress_forms"))
+    .limit(1);
+
+  let forms: any[] = formsRow?.value ? JSON.parse(formsRow.value) : [];
+
+  // Build forms section for the prompt
+  let formsSection: string;
+  if (forms.length > 0) {
+    formsSection = `AVAILABLE FORMS (use the "form" block with these exact IDs when the layout needs a form):
+${forms.map(f => `- formId: "${f.id}", formTitle: "${f.title}"`).join("\n")}`;
+  } else {
+    formsSection = `FORMS: No forms exist yet. If the layout needs a contact, newsletter, or signup form, use type "form" with formId: "__auto_contact__" for a contact form or formId: "__auto_newsletter__" for an email newsletter signup. The system will create these forms automatically.`;
+  }
+
+  // ── Build system prompt ───────────────────────────────────────────────────
+  const siteContext: string = settings.systemContext?.trim() ?? "";
+  const fullSystemPrompt = buildSystemPrompt(formsSection, siteContext, !!singleBlock);
+
   const userMessage = currentBlocks?.length > 0
     ? `Current page has ${currentBlocks.length} block(s). ${prompt}`
     : prompt;
@@ -81,15 +148,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
     let raw: string;
 
     if (provider === "anthropic") {
-      raw = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", systemPrompt, messages);
+      raw = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", fullSystemPrompt, messages);
     } else if (provider === "openai") {
-      raw = await callOpenAI(cfg.apiKey, cfg.defaultModel ?? "gpt-4o", systemPrompt, messages);
+      raw = await callOpenAI(cfg.apiKey, cfg.defaultModel ?? "gpt-4o", fullSystemPrompt, messages);
     } else if (provider === "gemini") {
-      raw = await callGemini(cfg.apiKey, cfg.defaultModel ?? "gemini-flash-latest", systemPrompt, messages);
+      raw = await callGemini(cfg.apiKey, cfg.defaultModel ?? "gemini-flash-latest", fullSystemPrompt, messages);
     } else if (provider === "mistral") {
-      raw = await callMistral(cfg.apiKey, cfg.defaultModel ?? "mistral-large-latest", systemPrompt, messages);
+      raw = await callMistral(cfg.apiKey, cfg.defaultModel ?? "mistral-large-latest", fullSystemPrompt, messages);
     } else if (provider === "groq") {
-      raw = await callGroq(cfg.apiKey, cfg.defaultModel ?? "llama-3.3-70b-versatile", systemPrompt, messages);
+      raw = await callGroq(cfg.apiKey, cfg.defaultModel ?? "llama-3.3-70b-versatile", fullSystemPrompt, messages);
     } else {
       return new Response(
         JSON.stringify({ error: `Unknown provider: ${provider}` }),
@@ -99,7 +166,58 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     const jsonMatch = raw.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON array found in AI response");
-    const blocks = JSON.parse(jsonMatch[0]);
+    let blocks: any[] = JSON.parse(jsonMatch[0]);
+
+    // ── Post-process: resolve auto form placeholders ───────────────────────
+    const autoContactNeeded = blocks.some(b => b.type === "form" && b.props?.formId === "__auto_contact__");
+    const autoNewsletterNeeded = blocks.some(b => b.type === "form" && b.props?.formId === "__auto_newsletter__");
+
+    if (autoContactNeeded || autoNewsletterNeeded) {
+      // Re-load forms in case they changed
+      const [freshFormsRow] = await db
+        .select({ value: wpOptions.optionValue })
+        .from(wpOptions)
+        .where(eq(wpOptions.optionName, "astropress_forms"))
+        .limit(1);
+      forms = freshFormsRow?.value ? JSON.parse(freshFormsRow.value) : [];
+
+      if (autoContactNeeded) {
+        // Use existing contact-like form or create one
+        let contactForm = forms.find(f =>
+          /contact|inquiry|enquiry|get.?in.?touch/i.test(f.title)
+        );
+        if (!contactForm) {
+          contactForm = makeContactForm("Contact Form");
+          forms.push(contactForm);
+        }
+        blocks = blocks.map(b =>
+          b.type === "form" && b.props?.formId === "__auto_contact__"
+            ? { ...b, props: { ...b.props, formId: contactForm.id, formTitle: contactForm.title } }
+            : b
+        );
+      }
+
+      if (autoNewsletterNeeded) {
+        let newsletterForm = forms.find(f =>
+          /newsletter|subscribe|signup|sign.?up/i.test(f.title)
+        );
+        if (!newsletterForm) {
+          newsletterForm = makeNewsletterForm("Newsletter Signup");
+          forms.push(newsletterForm);
+        }
+        blocks = blocks.map(b =>
+          b.type === "form" && b.props?.formId === "__auto_newsletter__"
+            ? { ...b, props: { ...b.props, formId: newsletterForm.id, formTitle: newsletterForm.title } }
+            : b
+        );
+      }
+
+      // Save updated forms list back to DB
+      await db
+        .insert(wpOptions)
+        .values({ optionName: "astropress_forms", optionValue: JSON.stringify(forms) })
+        .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: JSON.stringify(forms) } });
+    }
 
     return new Response(JSON.stringify({ blocks }), {
       headers: { "Content-Type": "application/json" },
