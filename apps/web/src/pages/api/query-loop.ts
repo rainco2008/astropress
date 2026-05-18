@@ -121,7 +121,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const postType = url.searchParams.get("postType") || "post";
   const page = Number(url.searchParams.get("page") || "2");
   const perPage = Number(url.searchParams.get("perPage") || "6");
-  const orderBy = (url.searchParams.get("orderBy") || "date") as any;
+  const rawOrderBy = url.searchParams.get("orderBy") || "date";
+  const orderBy = (rawOrderBy === "rand" ? "date" : rawOrderBy) as "date" | "title" | "menuOrder" | "id" | "modified";
   const orderRaw = (url.searchParams.get("order") || "desc").toLowerCase();
   const order = (orderRaw === "asc" ? "asc" : "desc") as "asc" | "desc";
   const templateId = url.searchParams.get("templateId") || "default-with-image";

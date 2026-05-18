@@ -27,11 +27,14 @@ for (const block of blocks) {
   if (block.type === "query-loop" && db) {
     try {
       const perPage = Number(block.props.perPage) || 6;
+      const rawOrderBy = String(block.props.orderBy || "date");
+      // "rand" is not supported by queryPosts — fall back to date
+      const orderBy = (rawOrderBy === "rand" ? "date" : rawOrderBy) as "date" | "title" | "menuOrder" | "id" | "modified";
       const { posts, total } = await queryPosts(db, {
         type: String(block.props.postType || "post"),
         perPage,
         page: currentPaged,
-        orderBy: (block.props.orderBy as any) || "date",
+        orderBy,
         order: (String(block.props.order || "desc").toLowerCase() as "asc" | "desc"),
       });
       queryLoopData[block.id] = posts;

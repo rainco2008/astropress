@@ -269,11 +269,12 @@ function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTo
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
+        const previewPerPage = Math.min(Number(p.perPage) || 6, 12);
         const [postsRes, tmplRes] = await Promise.all([
-          fetch(`/api/themes/query-preview?postType=${encodeURIComponent(String(p.postType || "post"))}&perPage=${Math.min(Number(p.perPage) || 6, 6)}&orderBy=${encodeURIComponent(String(p.orderBy || "date"))}&order=${encodeURIComponent(String(p.order || "DESC"))}`),
+          fetch(`/api/themes/query-preview?postType=${encodeURIComponent(String(p.postType || "post"))}&perPage=${previewPerPage}&orderBy=${encodeURIComponent(String(p.orderBy || "date"))}&order=${encodeURIComponent(String(p.order || "DESC"))}`),
           templateId.startsWith("default-")
             ? Promise.resolve(null)
-            : fetch(`/api/themes/loop-templates/defaults/${encodeURIComponent(templateId)}`).catch(() => null),
+            : fetch(`/api/page-schema/${encodeURIComponent(`__loop-item_${templateId}__`)}`).catch(() => null),
         ]);
         const postsData = await postsRes.json() as any;
         setPosts(Array.isArray(postsData.posts) ? postsData.posts : []);
@@ -302,7 +303,7 @@ function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTo
       <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}>
           {loading
-            ? Array.from({ length: Math.min(Number(p.perPage) || 6, 6) }).map((_, i) => (
+            ? Array.from({ length: Math.min(Number(p.perPage) || 6, 12) }).map((_, i) => (
                 <div key={i} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: cardRadius, overflow: "hidden" }}>
                   <div style={{ height: "160px", background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)", backgroundSize: "400px 100%", animation: "ap-shimmer 1.4s infinite" }} />
                   <div style={{ padding: "14px" }}>
@@ -326,6 +327,14 @@ function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTo
                 ))
           }
         </div>
+        {String(p.pagination || "none") !== "none" && !loading && (
+          <div style={{ marginTop: "16px", textAlign: "center", fontSize: "12px", color: tokens.colors.textMuted, borderTop: `1px solid ${tokens.colors.border}`, paddingTop: "12px" }}>
+            {String(p.pagination) === "numbers" && "Page numbers will appear here on the frontend"}
+            {String(p.pagination) === "prev-next" && "Previous / Next links will appear here on the frontend"}
+            {String(p.pagination) === "load-more" && `"${String(p.loadMoreText || "Load More")}" button will appear here on the frontend`}
+            {String(p.pagination) === "infinite-scroll" && "Infinite scroll is enabled — more posts load automatically"}
+          </div>
+        )}
       </div>
     </div>
   );

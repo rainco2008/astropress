@@ -104,6 +104,9 @@ GET    /api/themes              POST /api/themes
 PUT    /api/themes/[id]         POST /api/themes/[id] (activate)  DELETE /api/themes/[id]
 POST   /api/themes/upload       — install theme from .zip or .json
 GET    /api/themes/config
+GET    /api/themes/query-preview  — admin live preview posts for query-loop block (auth required)
+GET    /api/themes/loop-templates  POST /api/themes/loop-templates  — user loop templates CRUD
+GET    /api/query-loop          — web app; load-more / infinite-scroll HTML for query-loop block
 POST   /api/plugins/upload      — install light plugin from .zip or .json
 PUT    /api/plugins/[name]      — activate/deactivate light plugin
 DELETE /api/plugins/[name]      — remove light plugin
@@ -160,6 +163,9 @@ POST   /api/setup
 | `astropress_page_schema___footer__` | Footer template block schema |
 | `astropress_ai_settings` | AI provider config (provider, model, apiKey, systemContext) |
 | `astropress_light_plugins` | JSON array of uploaded light plugin manifests |
+| `astropress_loop_templates` | JSON array of user loop template metadata `[{id, name, createdAt, updatedAt}]` |
+| `astropress_page_schema___loop-item_<id>__` | Block schema for a user-created loop item template |
+| `astropress_theme_templates` | JSON array of `ThemeTemplate` objects (conditions, schemaSlug, type) |
 | `astropress_setup_complete` | "1" if initial setup done |
 | `siteurl` | Frontend site URL (used by admin to build preview links) |
 | `blogname` | Site title |
@@ -240,11 +246,22 @@ interface ThemeTokens {
 ```
 
 ### Visual Editor (ThemeEditor.tsx)
-- Blocks: `hero`, `text`, `image`, `columns`, `cta`, `features`, `form`, `nav`, `site-title`, `spacer`, `divider`, `html`, `ai`
+- Page/template blocks: `hero`, `text`, `image`, `columns`, `cta`, `features`, `form`, `nav`, `site-title`, `spacer`, `divider`, `html`, `ai`, `query-loop`
+- Loop item blocks: `loop-image`, `loop-title`, `loop-excerpt`, `loop-date`, `loop-author`, `loop-category`, `loop-read-more`, `loop-custom-field`, `spacer`, `divider`, `html`
 - Block schemas stored in `wp_options` as `astropress_page_schema_<slug>`
 - Header/Footer templates: `astropress_page_schema___header__` / `___footer__`
+- Loop item templates: `astropress_page_schema___loop-item_<id>__`; metadata list in `astropress_loop_templates`
 - Pages default to visual editor; classic via `?classic=1`
 - CPT posts: toggle via `?editor=classic` vs `?editor=visual` tabs
+
+### Query Loop Block
+- `query-loop` block queries and renders posts in a grid server-side in `apps/web/src/components/BlockRenderer.astro`
+- Pagination types: `none` (default), `numbers`, `prev-next`, `load-more`, `infinite-scroll`
+- Load-more / infinite-scroll use `GET /api/query-loop` (web app) to fetch subsequent pages as pre-rendered HTML
+- Live preview in ThemeEditor fetches from `GET /api/themes/query-preview` (admin API)
+- Preview shows exactly `min(perPage, 12)` posts; when pagination is set, shows a note that it is active
+- `queryPosts` orderBy supports: `"date"`, `"title"`, `"menuOrder"`, `"id"`, `"modified"` — `"rand"` maps to `"date"` as fallback
+- Custom field values in loop cards: batch-fetched via `inArray(wpPostmeta.postId, postIds)` in both `BlockRenderer.astro` and `query-loop.ts`
 
 ### Theme Upload Spec (.zip format)
 ```

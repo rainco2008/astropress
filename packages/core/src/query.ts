@@ -107,8 +107,8 @@ export interface QueryArgs {
   perPage?: number;
   /** Page number (1-based). Default: 1 */
   page?: number;
-  /** Order field: "date" | "title" | "menuOrder" | "id". Default: "date" */
-  orderBy?: "date" | "title" | "menuOrder" | "id";
+  /** Order field: "date" | "title" | "menuOrder" | "id" | "modified". Default: "date" */
+  orderBy?: "date" | "title" | "menuOrder" | "id" | "modified";
   /** Sort direction. Default: "desc" */
   order?: "asc" | "desc";
   /** Full-text search in title and content */
@@ -242,9 +242,10 @@ export async function queryPosts(
   const where = conditions.length === 1 ? conditions[0] : and(...(conditions as any));
 
   const orderCol =
-    orderBy === "title"     ? wpPosts.postTitle   :
+    orderBy === "title"     ? wpPosts.postTitle    :
     orderBy === "menuOrder" ? wpPosts.menuOrder    :
     orderBy === "id"        ? wpPosts.id           :
+    orderBy === "modified"  ? wpPosts.postModified :
                               wpPosts.postDate;
 
   const orderFn = order === "asc" ? asc : desc;
