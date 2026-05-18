@@ -375,6 +375,9 @@ const icons = adminIcons;
               {pt.pluralLabel}
             </a>
           ))}
+          <a href="/admin/medias" class={currentPath.startsWith("/admin/medias") ? "is-active" : ""}>
+            <Fragment set:html={icons.media} /> Media
+          </a>
           <a href="/admin/forms" class={currentPath.startsWith("/admin/forms") ? "is-active" : ""}>
             <Fragment set:html={icons.forms} /> Forms
           </a>

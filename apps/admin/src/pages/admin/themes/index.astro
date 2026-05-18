@@ -3,47 +3,113 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { wpOptions } from "@astropress/core/schema";
 import { eq } from "drizzle-orm";
 import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
-import type { Theme } from "@astropress/core/types/theme";
+import type { Theme, ThemeTemplate } from "@astropress/core/types/theme";
 
 const db = Astro.locals.db;
 if (!Astro.locals.user || !db) return Astro.redirect("/login");
 
-// Load themes
+function uid() { return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10); }
+
+// Load data
 const [themesRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_themes")).limit(1);
-const [activeRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_active_theme")).limit(1);
+const [activeRow]  = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_active_theme")).limit(1);
+const [siteUrlRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "siteurl")).limit(1);
 
 let themes: Theme[] = themesRow?.value ? JSON.parse(themesRow.value) : [];
 
-// Bootstrap default theme if none
+// ── Bootstrap "Base Theme" + default templates if nothing exists ───────────
 if (themes.length === 0) {
-  const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
-  themes = [{
-    id: "default",
-    name: "Default",
-    description: "The default AstroPress theme",
-    tokens: tokenRow?.value ? JSON.parse(tokenRow.value) : DEFAULT_THEME_TOKENS,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }];
+  const now = new Date().toISOString();
+
+  const baseTheme: Theme = {
+    id: "base-theme",
+    name: "Base Theme",
+    description: "A clean, minimal starter theme — edit to make it yours",
+    version: "1.0.0",
+    author: "AstroPress",
+    tokens: DEFAULT_THEME_TOKENS,
+    createdAt: now,
+    updatedAt: now,
+  };
+  themes = [baseTheme];
+
+  await db.insert(wpOptions)
+    .values({ optionName: "astropress_themes", optionValue: JSON.stringify(themes), autoload: "yes" })
+    .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: JSON.stringify(themes) } });
+  await db.insert(wpOptions)
+    .values({ optionName: "astropress_active_theme", optionValue: "base-theme", autoload: "yes" })
+    .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: "base-theme" } });
+  await db.insert(wpOptions)
+    .values({ optionName: "astropress_theme_config", optionValue: JSON.stringify(DEFAULT_THEME_TOKENS), autoload: "yes" })
+    .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: JSON.stringify(DEFAULT_THEME_TOKENS) } });
+
+  // Seed header + footer templates
+  const hId = uid(), fId = uid();
+  const headerSlug = `__header_${hId}__`;
+  const footerSlug = `__footer_${fId}__`;
+
+  const seedTemplates: ThemeTemplate[] = [
+    { id: hId, name: "Header 1", type: "header", conditions: [{ rule: "entire_site" }], schemaSlug: headerSlug, createdAt: now, updatedAt: now },
+    { id: fId, name: "Footer 1", type: "footer", conditions: [{ rule: "entire_site" }], schemaSlug: footerSlug, createdAt: now, updatedAt: now },
+  ];
+  await db.insert(wpOptions)
+    .values({ optionName: "astropress_theme_templates", optionValue: JSON.stringify(seedTemplates), autoload: "yes" })
+    .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: JSON.stringify(seedTemplates) } });
+
+  const headerSchema = {
+    version: 1,
+    blocks: [{
+      id: uid(), type: "nav",
+      props: {
+        logo: "AstroPress", logoSize: 22, sticky: false,
+        links: [
+          { label: "Home", url: "/" },
+          { label: "Blog", url: "/blog" },
+          { label: "About", url: "/about" },
+          { label: "Contact", url: "/contact" },
+        ],
+        align: "right", background: "#ffffff", textColor: "#1d2327", borderBottom: true,
+      },
+    }],
+  };
+  await db.insert(wpOptions).values({
+    optionName: `astropress_page_schema_${headerSlug}`,
+    optionValue: JSON.stringify(headerSchema),
+    autoload: "no",
+  });
+
+  const footerSchema = {
+    version: 1,
+    blocks: [{
+      id: uid(), type: "html",
+      props: {
+        html: `<footer style="background:#1d2327;color:#a7aaad;padding:48px 24px;text-align:center"><div style="max-width:1200px;margin:0 auto"><div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:24px"><a href="/" style="color:#a7aaad;text-decoration:none">Home</a><a href="/blog" style="color:#a7aaad;text-decoration:none">Blog</a><a href="/about" style="color:#a7aaad;text-decoration:none">About</a><a href="/contact" style="color:#a7aaad;text-decoration:none">Contact</a></div><p style="margin:0;font-size:13px">© ${new Date().getFullYear()} Your Site. Built with AstroPress.</p></div></footer>`,
+      },
+    }],
+  };
+  await db.insert(wpOptions).values({
+    optionName: `astropress_page_schema_${footerSlug}`,
+    optionValue: JSON.stringify(footerSchema),
+    autoload: "no",
+  });
 }
 
-const activeThemeId = activeRow?.value ?? themes[0]?.id ?? "default";
-
-const allSchemaRows = await db.select({ name: wpOptions.optionName }).from(wpOptions).where(eq(wpOptions.autoload, "no"));
-const hasHeaderSchema = allSchemaRows.some(r => r.name === "astropress_page_schema___header__");
-const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_schema___footer__");
+const activeThemeId = activeRow?.value ?? themes[0]?.id ?? "base-theme";
+const siteUrl = siteUrlRow?.value ?? "http://localhost:4322";
 ---
 <AdminLayout title="Themes">
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <h1 class="wp-heading-inline" style="margin:0">Themes</h1>
-    <button onclick="document.getElementById('new-theme-modal').style.display='flex'" class="button button-primary">Add New Theme</button>
+    <div style="display:flex;gap:8px">
+      <a href="/admin/themes/builder" class="button">Theme Builder</a>
+      <button onclick="document.getElementById('new-theme-modal').style.display='flex'" class="button button-primary">Add New Theme</button>
+    </div>
   </div>
   <hr class="wp-header-end" />
 
   <!-- Theme Gallery -->
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-bottom:40px">
-
     {themes.map((theme) => {
       const isActive = theme.id === activeThemeId;
       const c = theme.tokens.colors;
@@ -65,10 +131,11 @@ const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_sche
           </div>
           <!-- Actions -->
           <div style="padding:10px 14px;background:#f6f7f7;display:flex;gap:6px;flex-wrap:wrap">
-            <a href={`/admin/themes/customize/${theme.id}`} class="button button-small">Customize</a>
+            <a href="/admin/themes/builder" class="button button-small button-primary">Customize</a>
             {!isActive && (
-              <button onclick={`activateTheme('${theme.id}')`} class="button button-small button-primary">Activate</button>
+              <button onclick={`activateTheme('${theme.id}')`} class="button button-small">Activate</button>
             )}
+            <a href={`/api/themes/export/${theme.id}`} download class="button button-small" title="Export theme as JSON">Export</a>
             {!isActive && (
               <button onclick={`deleteTheme('${theme.id}')`} class="button button-small" style="color:#d63638;border-color:#d63638;margin-left:auto">Delete</button>
             )}
@@ -76,18 +143,6 @@ const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_sche
         </div>
       );
     })}
-  </div>
-
-  <!-- Site Editor (FSE) -->
-  <h2 style="font-size:16px;font-weight:600;margin:0 0 8px;color:#1d2327">Site Editor</h2>
-  <p style="color:#646970;font-size:13px;margin:0 0 16px">Edit your site's header and footer with the visual block editor.</p>
-  <div style="display:flex;gap:12px;margin-bottom:40px">
-    <a href="/admin/themes/edit/__header__" class="button" style={hasHeaderSchema ? "border-color:#2271b1;color:#2271b1" : ""}>
-      {hasHeaderSchema ? "Edit Header" : "Design Header"}
-    </a>
-    <a href="/admin/themes/edit/__footer__" class="button" style={hasFooterSchema ? "border-color:#2271b1;color:#2271b1" : ""}>
-      {hasFooterSchema ? "Edit Footer" : "Design Footer"}
-    </a>
   </div>
 
   <!-- New Theme Modal -->
@@ -115,6 +170,7 @@ const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_sche
       </div>
     </div>
   </div>
+
 
 </AdminLayout>
 
@@ -145,17 +201,16 @@ const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_sche
 
       let cloneFrom = null;
       if (cloneId) {
-        // Get existing theme tokens to clone
         const res = await fetch('/api/themes');
         const data = await res.json();
-        const src = data.themes?.find(t => t.id === cloneId);
+        const src = data.themes?.find(function(t) { return t.id === cloneId; });
         if (src) cloneFrom = src.tokens;
       }
 
       const res = await fetch('/api/themes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: desc, cloneFrom }),
+        body: JSON.stringify({ name: name, description: desc, cloneFrom: cloneFrom }),
       });
       const data = await res.json();
       if (res.ok && data.theme) {
@@ -164,5 +219,6 @@ const hasFooterSchema = allSchemaRows.some(r => r.name === "astropress_page_sche
         alert('Failed to create theme');
       }
     };
+
   })();
 </script>

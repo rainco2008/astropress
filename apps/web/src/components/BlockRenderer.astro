@@ -1,6 +1,7 @@
 ---
 import type { Block, ThemeTokens } from "@astropress/core/types/theme";
 import { buildFormHtml } from "../lib/formRenderer";
+import { queryPosts } from "@astropress/core/query";
 
 interface Props {
   blocks: Block[];
@@ -14,11 +15,28 @@ interface Props {
 
 const { blocks, tokens, formsById = {}, navItems = [], siteTitle = "", siteTagline = "", wrapMain = true } = Astro.props;
 
+// Pre-fetch posts for any query-loop blocks
+const db = Astro.locals.db;
+const queryLoopData: Record<string, any[]> = {};
+for (const block of blocks) {
+  if (block.type === "query-loop" && db) {
+    try {
+      const { posts } = await queryPosts(db, {
+        type: String(block.props.postType || "post"),
+        perPage: Number(block.props.perPage) || 6,
+        orderBy: (block.props.orderBy as any) || "date",
+        order: (String(block.props.order || "DESC") as "DESC" | "ASC"),
+      });
+      queryLoopData[block.id] = posts;
+    } catch { queryLoopData[block.id] = []; }
+  }
+}
+
 function esc(s: unknown) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function renderBlock(block: Block): string {
+function renderBlock(block: Block, queryData?: any[]): string {
   const p = block.props;
 
   switch (block.type) {
@@ -127,11 +145,84 @@ function renderBlock(block: Block): string {
     case "ai":
       return ""; // AI placeholder — not rendered on frontend
 
+    case "query-loop": {
+      const posts = queryData ?? [];
+      const cols = Number(p.columns) || 3;
+      const gap = String(p.gap || "24px");
+      const cardBg = String(p.cardBg || "#ffffff");
+      const cardBorder = String(p.cardBorder || "#e2e8f0");
+      const cardRadius = String(p.cardRadius || "8px");
+      const imgH = Number(p.imageHeight) || 200;
+      const padding = String(p.padding || tokens.spacing.sectionY + " 48px");
+      const cssClass = p._cssClass ? ` ${esc(p._cssClass)}` : "";
+      const el = String(p._element || "section");
+
+      if (posts.length === 0) {
+        return `<${el} class="ap-block ap-block-query-loop${cssClass}" style="padding:${padding};text-align:center;color:${tokens.colors.textMuted};font-size:14px;">No posts found.</${el}>`;
+      }
+
+      const cardsHtml = posts.map((post: any) => {
+        const postUrl = `/${post.postName || post.postType || "blog"}/${post.postName ?? post.id}`;
+        const titleUrl = post.postType === "page" ? `/${post.postName}` : `/blog/${post.postName}`;
+        const date = post.postDate ? new Date(post.postDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
+        const excerpt = post.postExcerpt || (post.postContent ? String(post.postContent).replace(/<[^>]+>/g, "").slice(0, 140) + "…" : "");
+
+        return `
+<article style="background:${cardBg};border:1px solid ${cardBorder};border-radius:${cardRadius};overflow:hidden;display:flex;flex-direction:column;">
+  ${p.showImage !== false ? `<a href="${esc(titleUrl)}" style="display:block;height:${imgH}px;background:${tokens.colors.surface};overflow:hidden;flex-shrink:0;">
+    <div style="width:100%;height:100%;background:linear-gradient(135deg,${tokens.colors.surface},${tokens.colors.border});display:flex;align-items:center;justify-content:center;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${tokens.colors.border}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    </div>
+  </a>` : ""}
+  <div style="padding:20px;flex:1;display:flex;flex-direction:column;">
+    ${p.showCategory !== false ? `<div style="font-size:10px;font-weight:700;color:${tokens.colors.primary};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${esc(post.postType || "Post")}</div>` : ""}
+    <h3 style="font-family:${tokens.fonts.heading};font-weight:700;font-size:1.05rem;margin:0 0 8px;line-height:1.4;">
+      <a href="${esc(titleUrl)}" style="color:${tokens.colors.text};text-decoration:none;">${esc(post.postTitle)}</a>
+    </h3>
+    ${p.showDate !== false && date ? `<div style="font-size:11px;color:${tokens.colors.textMuted};margin-bottom:10px;">${date}</div>` : ""}
+    ${p.showExcerpt !== false && excerpt ? `<p style="font-size:0.9rem;color:${tokens.colors.textMuted};line-height:1.65;margin:0 0 16px;flex:1;">${esc(excerpt)}</p>` : ""}
+    ${p.showAuthor !== false ? `<div style="font-size:11px;color:${tokens.colors.textMuted};margin-top:auto;">By Author</div>` : ""}
+    <a href="${esc(titleUrl)}" style="margin-top:12px;display:inline-block;font-size:13px;font-weight:600;color:${tokens.colors.primary};text-decoration:none;">Read more →</a>
+  </div>
+</article>`;
+      }).join("");
+
+      return `<${el} class="ap-block ap-block-query-loop${cssClass}" style="padding:${padding};">
+  <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;">
+    <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:${gap};">
+      ${cardsHtml}
+    </div>
+  </div>
+</${el}>`;
+    }
+
     default:
       return "";
   }
 }
 
-const html = blocks.map(renderBlock).join("\n");
+function wrapBlock(block: Block, inner: string): string {
+  const p = block.props;
+  const cssClass = p._cssClass ? ` ${esc(p._cssClass)}` : "";
+  const animation = p._animation && p._animation !== "none" ? ` data-ap-animation="${esc(p._animation)}"` : "";
+  const customCss = p._customCss ? `<style>.ap-block-${block.id}{}</style>\n` : "";
+  if (!cssClass && !animation && !customCss) return inner;
+  // Add class + animation attribute to the first tag in the output
+  return customCss + inner.replace(/^(\s*<[a-zA-Z]+)([ >])/, `$1${cssClass}${animation}$2`);
+}
+
+const html = blocks.map(block => wrapBlock(block, renderBlock(block, queryLoopData[block.id]))).join("\n");
 ---
+<style>
+  @keyframes ap-fade-in { from { opacity:0 } to { opacity:1 } }
+  @keyframes ap-slide-up { from { opacity:0; transform:translateY(32px) } to { opacity:1; transform:translateY(0) } }
+  @keyframes ap-slide-left { from { opacity:0; transform:translateX(-32px) } to { opacity:1; transform:translateX(0) } }
+  @keyframes ap-slide-right { from { opacity:0; transform:translateX(32px) } to { opacity:1; transform:translateX(0) } }
+  @keyframes ap-zoom-in { from { opacity:0; transform:scale(0.92) } to { opacity:1; transform:scale(1) } }
+  [data-ap-animation="ap-fade-in"]  { animation: ap-fade-in  0.6s ease both }
+  [data-ap-animation="ap-slide-up"] { animation: ap-slide-up 0.6s ease both }
+  [data-ap-animation="ap-slide-left"]  { animation: ap-slide-left  0.6s ease both }
+  [data-ap-animation="ap-slide-right"] { animation: ap-slide-right 0.6s ease both }
+  [data-ap-animation="ap-zoom-in"]  { animation: ap-zoom-in  0.6s ease both }
+</style>
 <div class="ap-blocks" set:html={html} />

@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-  const siteUrl = import.meta.env.SITE_URL ?? "http://localhost:4321";
+  const mediaBase = (import.meta.env.MEDIA_BASE_URL ?? import.meta.env.SITE_URL ?? "http://localhost:4321").replace(/\/$/, "");
 
   const [{ id }] = await (db as any).insert(wpPosts).values({
     postTitle: originalName.replace(/\.[^.]+$/, ""),
@@ -58,7 +58,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   });
 
   return new Response(
-    JSON.stringify({ id, url: `/media/${key}`, filename: key }),
+    JSON.stringify({ id, url: `${mediaBase}/media/${key}`, filename: key }),
     { status: 201, headers: { "Content-Type": "application/json" } }
   );
 };

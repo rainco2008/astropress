@@ -10,7 +10,7 @@ import BlockRenderer from "../components/BlockRenderer.astro";
 interface Props {
   title?: string;
   description?: string;
-  fullWidth?: boolean; // skip site-wrapper on main content (used when blocks own layout)
+  fullWidth?: boolean;
 }
 
 const { title, description, fullWidth = false } = Astro.props;
@@ -22,28 +22,54 @@ const site = db
 
 const navItems = db ? await getNavMenu(db, "primary") : [];
 
-// Load FSE header/footer schemas
 let headerBlocks: any[] | null = null;
 let footerBlocks: any[] | null = null;
 let tokens: ThemeTokens = DEFAULT_THEME_TOKENS;
 let formsById: Record<string, any> = {};
 
 if (db) {
-  const [headerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_page_schema___header__")).limit(1);
-  if (headerRow?.value) {
-    const s = JSON.parse(headerRow.value);
-    if (s.blocks?.length > 0) headerBlocks = s.blocks;
-  }
-
-  const [footerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_page_schema___footer__")).limit(1);
-  if (footerRow?.value) {
-    const s = JSON.parse(footerRow.value);
-    if (s.blocks?.length > 0) footerBlocks = s.blocks;
-  }
-
+  // 1. Load theme tokens
   const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
   if (tokenRow?.value) tokens = JSON.parse(tokenRow.value);
 
+  // 2. Load active template slots (simple key → schemaSlug map)
+  const [slotsRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_template_slots")).limit(1);
+  let slots: Record<string, string> = {};
+
+  if (slotsRow?.value) {
+    slots = JSON.parse(slotsRow.value);
+  } else {
+    // Migrate from old conditions-based system: pick first template of each type that has conditions
+    const [tmplRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_templates")).limit(1);
+    const allTmpls: any[] = tmplRow?.value ? JSON.parse(tmplRow.value) : [];
+    for (const tmpl of allTmpls) {
+      if (!slots[tmpl.type] && (tmpl.conditions?.length ?? 0) > 0) {
+        slots[tmpl.type] = tmpl.schemaSlug;
+      }
+    }
+  }
+
+  // 3. Load header schema from active slot
+  const headerSlug = slots.header;
+  if (headerSlug) {
+    const [headerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, `astropress_page_schema_${headerSlug}`)).limit(1);
+    if (headerRow?.value) {
+      const s = JSON.parse(headerRow.value);
+      if (s.blocks?.length > 0) headerBlocks = s.blocks;
+    }
+  }
+
+  // 4. Load footer schema from active slot
+  const footerSlug = slots.footer;
+  if (footerSlug) {
+    const [footerRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, `astropress_page_schema_${footerSlug}`)).limit(1);
+    if (footerRow?.value) {
+      const s = JSON.parse(footerRow.value);
+      if (s.blocks?.length > 0) footerBlocks = s.blocks;
+    }
+  }
+
+  // 5. Load forms
   const [formsRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_forms")).limit(1);
   if (formsRow?.value) {
     const allForms: any[] = JSON.parse(formsRow.value);
@@ -62,6 +88,28 @@ const metaDesc = description || site.blogdescription;
     <title>{pageTitle}</title>
     {metaDesc && <meta name="description" content={metaDesc} />}
     <style set:html={themeStyles} />
+    <style set:html={`
+      :root {
+        --color-primary: ${tokens.colors.primary};
+        --color-primary-hover: ${tokens.colors.primary};
+        --color-bg: ${tokens.colors.background};
+        --color-surface: ${tokens.colors.surface};
+        --color-border: ${tokens.colors.border};
+        --color-text: ${tokens.colors.text};
+        --color-muted: ${tokens.colors.textMuted};
+        --font-sans: ${tokens.fonts.body};
+        --font-heading: ${tokens.fonts.heading};
+        --max-width: ${tokens.spacing.containerMax};
+        --radius-md: ${tokens.spacing.borderRadius};
+        --radius-sm: ${tokens.spacing.borderRadius};
+        --section-y: ${tokens.spacing.sectionY};
+      }
+      body {
+        font-family: ${tokens.fonts.body};
+        background: ${tokens.colors.background};
+        color: ${tokens.colors.text};
+      }
+    `} />
   </head>
   <body>
     {headerBlocks ? (

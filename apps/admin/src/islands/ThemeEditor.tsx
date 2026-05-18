@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import type { Block, BlockType, ThemeTokens } from "@astropress/core/types/theme";
-import { BLOCK_DEFAULTS } from "@astropress/core/types/theme";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import type { Block, BlockType, ThemeTokens, TemplateType, DisplayCondition, ConditionRule } from "@astropress/core/types/theme";
+import { BLOCK_DEFAULTS, TEMPLATE_TYPE_LABELS, CONDITION_RULE_LABELS } from "@astropress/core/types/theme";
+import { LIBRARY_BLOCKS, LIBRARY_PAGES, LIBRARY_CATEGORIES } from "../lib/templateLibrary";
+import type { UserTemplate, LibraryCategory } from "../lib/templateLibrary";
 
 interface FormOption { id: string; title: string; fieldCount: number; }
 
@@ -11,8 +13,33 @@ interface Props {
   initialTokens: ThemeTokens;
   forms?: FormOption[];
   isTemplate?: boolean;
-  templatePart?: "header" | "footer";
+  templatePart?: TemplateType;
+  templateId?: string;
+  initialConditions?: DisplayCondition[];
   siteUrl?: string;
+}
+
+// ─── Plugin Panel Extension Registry ─────────────────────────────────────────
+export interface BlockPanelExtension {
+  id: string;
+  label: string;
+  render: (block: Block, onChange: (props: Record<string, unknown>) => void) => React.ReactNode;
+}
+
+if (typeof window !== "undefined") {
+  const w = window as any;
+  if (!w.__apBlockPanels__) w.__apBlockPanels__ = {};
+  w.AstroPressEditor = w.AstroPressEditor ?? {};
+  w.AstroPressEditor.registerBlockPanel = (blockType: string, ext: BlockPanelExtension) => {
+    if (!w.__apBlockPanels__[blockType]) w.__apBlockPanels__[blockType] = [];
+    w.__apBlockPanels__[blockType].push(ext);
+  };
+}
+
+function getBlockPanelExtensions(blockType: string): BlockPanelExtension[] {
+  if (typeof window === "undefined") return [];
+  const w = window as any;
+  return [...(w.__apBlockPanels__?.["*"] ?? []), ...(w.__apBlockPanels__?.[blockType] ?? [])];
 }
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -28,6 +55,7 @@ const CONTENT_PALETTE = [
   { type: "spacer" as BlockType, label: "Spacer", desc: "Vertical whitespace" },
   { type: "divider" as BlockType, label: "Divider", desc: "Horizontal rule" },
   { type: "html" as BlockType, label: "HTML", desc: "Custom HTML embed" },
+  { type: "query-loop" as BlockType, label: "Query Loop", desc: "Display posts in a grid" },
 ];
 
 const TEMPLATE_PALETTE = [
@@ -84,7 +112,7 @@ function AIBlockPreview({ block, tokens, isSelected, onPropChange, onReplace }: 
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, singleBlock: true }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (!res.ok || data.error) { setError(data.error || "Generation failed"); return; }
       const generated: Block[] = data.blocks ?? [];
       if (generated.length > 0 && onReplace) onReplace({ ...generated[0], id: block.id });
@@ -238,8 +266,8 @@ function BlockPreview({ block, tokens, forms, isSelected, onPropChange, onReplac
     case "site-title":
       return (
         <div style={{ ...sty, padding: "24px 48px", textAlign: (p.align as any) || "left" }}>
-          <div style={{ fontFamily: tokens.fonts.heading, fontWeight: 700, fontSize: p.size === "large" ? "2rem" : p.size === "small" ? "1rem" : "1.4rem", color: tokens.colors.text }}>Site Name</div>
-          {p.showTagline && <div style={{ color: tokens.colors.textMuted, fontSize: "0.9rem", marginTop: "4px" }}>Site tagline goes here</div>}
+          <div style={{ fontFamily: tokens.fonts.heading, fontWeight: 700, fontSize: String(p.size) === "large" ? "2rem" : String(p.size) === "small" ? "1rem" : "1.4rem", color: tokens.colors.text }}>Site Name</div>
+          {!!p.showTagline && <div style={{ color: tokens.colors.textMuted, fontSize: "0.9rem", marginTop: "4px" }}>Site tagline goes here</div>}
         </div>
       );
     case "spacer":
@@ -252,6 +280,37 @@ function BlockPreview({ block, tokens, forms, isSelected, onPropChange, onReplac
       return <div style={{ padding: "24px 48px", ...sty }} dangerouslySetInnerHTML={{ __html: String(p.content || "") }} />;
     case "ai":
       return <AIBlockPreview block={block} tokens={tokens} isSelected={isSelected} onPropChange={onPropChange} onReplace={onReplace} />;
+    case "query-loop": {
+      const cols = Number(p.columns) || 3;
+      const count = Math.min(Number(p.perPage) || 6, 6);
+      const gap = String(p.gap || "24px");
+      const cardBg = String(p.cardBg || "#ffffff");
+      const cardBorder = String(p.cardBorder || "#e2e8f0");
+      const cardRadius = String(p.cardRadius || "8px");
+      const imgH = Number(p.imageHeight) || 200;
+      return (
+        <div style={{ ...sty, padding: String(p.padding || "5rem 48px") }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}>
+              {Array.from({ length: count }).map((_, i) => (
+                <div key={i} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: cardRadius, overflow: "hidden" }}>
+                  {p.showImage !== false && <div style={{ height: `${imgH}px`, background: `linear-gradient(135deg, ${tokens.colors.surface} 0%, ${tokens.colors.border} 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={tokens.colors.border} strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </div>}
+                  <div style={{ padding: "16px" }}>
+                    {p.showCategory !== false && <div style={{ fontSize: "10px", fontWeight: 700, color: tokens.colors.primary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Category</div>}
+                    <div style={{ fontFamily: tokens.fonts.heading, fontWeight: 700, fontSize: "1rem", color: tokens.colors.text, marginBottom: "8px", lineHeight: 1.4 }}>Post Title {i + 1}</div>
+                    {p.showDate !== false && <div style={{ fontSize: "11px", color: tokens.colors.textMuted, marginBottom: "8px" }}>Jan {i + 1}, 2025</div>}
+                    {p.showExcerpt !== false && <div style={{ fontSize: "13px", color: tokens.colors.textMuted, lineHeight: 1.6, marginBottom: "12px" }}>A short excerpt from this post will appear here...</div>}
+                    {p.showAuthor !== false && <div style={{ fontSize: "11px", color: tokens.colors.textMuted }}>By Author Name</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
     default:
       return <div style={{ padding: "20px", color: "#999", fontStyle: "italic" }}>Unknown block type</div>;
   }
@@ -286,8 +345,189 @@ function ColorField({ name, value, onChange }: { name: string; value: string; on
 
 const alignOpts = [{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }];
 
+// ─── Media Picker Modal ────────────────────────────────────────────────────────
+interface MediaItem { id: number; url: string; title: string; mimeType: string; filename: string; }
+
+function MediaPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [selected, setSelected] = useState<MediaItem | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const perPage = 24;
+
+  const load = useCallback((p: number, q: string) => {
+    setSearching(true);
+    const qs = new URLSearchParams({ page: String(p), ...(q ? { search: q } : {}) });
+    fetch(`/api/media?${qs}`)
+      .then(r => r.json())
+      .then((data: any) => { setItems(data.items ?? []); setTotal(data.total ?? 0); })
+      .finally(() => setSearching(false));
+  }, []);
+
+  useEffect(() => { load(1, ""); }, [load]);
+
+  const onSearch = (val: string) => {
+    setSearch(val);
+    setPage(1);
+    if (searchRef.current) clearTimeout(searchRef.current);
+    searchRef.current = setTimeout(() => load(1, val), 300);
+  };
+
+  const goPage = (p: number) => { setPage(p); load(p, search); };
+
+  const uploadFiles = async (files: File[]) => {
+    setUploading(true);
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      await fetch("/api/media/upload", { method: "POST", body: form });
+    }
+    setUploading(false);
+    setPage(1);
+    load(1, search);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length) uploadFiles(files);
+  };
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 9999,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+  const modalStyle: React.CSSProperties = {
+    background: "#1d2327", borderRadius: "6px", width: "900px", maxWidth: "95vw",
+    height: "80vh", display: "flex", flexDirection: "column", overflow: "hidden",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+  };
+
+  return (
+    <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={modalStyle}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 18px", borderBottom: "1px solid #3c434a", flexShrink: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: "14px", color: "#e0e0e0", flex: 1 }}>Media Library</span>
+          <input
+            type="search" placeholder="Search…" value={search} onChange={e => onSearch(e.target.value)}
+            style={{ background: "#2c3338", border: "1px solid #3c434a", borderRadius: "4px", color: "#e0e0e0", padding: "6px 10px", fontSize: "12px", width: "200px", outline: "none" }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            style={{ background: "#2271b1", border: "none", borderRadius: "4px", color: "#fff", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf" multiple style={{ display: "none" }}
+            onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) uploadFiles(f); e.target.value = ""; }} />
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8c8f94", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          {/* Grid */}
+          <div
+            style={{ flex: 1, overflowY: "auto", padding: "14px", background: dragOver ? "rgba(34,113,177,0.1)" : "transparent", transition: "background 0.15s" }}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+          >
+            {dragOver && (
+              <div style={{ position: "absolute", inset: 0, border: "2px dashed #2271b1", borderRadius: "4px", pointerEvents: "none", zIndex: 2, margin: "14px" }} />
+            )}
+            {searching && <div style={{ color: "#8c8f94", fontSize: "12px", textAlign: "center", padding: "20px" }}>Loading…</div>}
+            {!searching && items.length === 0 && (
+              <div style={{ color: "#8c8f94", fontSize: "13px", textAlign: "center", padding: "40px 20px" }}>
+                {search ? "No results." : "No media yet. Upload an image above or drag & drop here."}
+              </div>
+            )}
+            {!searching && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "8px" }}>
+                {items.map(item => {
+                  const isImg = item.mimeType.startsWith("image/");
+                  const isSel = selected?.id === item.id;
+                  return (
+                    <div key={item.id}
+                      onClick={() => setSelected(item)}
+                      onDoubleClick={() => { onSelect(item.url); onClose(); }}
+                      style={{
+                        border: `2px solid ${isSel ? "#2271b1" : "transparent"}`,
+                        borderRadius: "4px", overflow: "hidden", cursor: "pointer",
+                        background: "#2c3338", position: "relative",
+                        boxShadow: isSel ? "0 0 0 1px #2271b1" : "none",
+                      }}>
+                      {isImg
+                        ? <img src={item.url} alt={item.title} style={{ width: "100%", height: "90px", objectFit: "cover", display: "block" }} loading="lazy" />
+                        : <div style={{ width: "100%", height: "90px", display: "flex", alignItems: "center", justifyContent: "center", background: "#2c3338" }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8c8f94" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          </div>
+                      }
+                      <div style={{ padding: "5px 6px", fontSize: "10px", color: "#8c8f94", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {item.title || item.filename}
+                      </div>
+                      {isSel && <div style={{ position: "absolute", top: "4px", right: "4px", width: "16px", height: "16px", background: "#2271b1", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      </div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", gap: "4px", justifyContent: "center", marginTop: "16px" }}>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button key={p} onClick={() => goPage(p)}
+                    style={{ padding: "4px 10px", border: "1px solid #3c434a", borderRadius: "3px", background: p === page ? "#2271b1" : "#2c3338", color: p === page ? "#fff" : "#8c8f94", cursor: "pointer", fontSize: "12px" }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right details pane */}
+          {selected && (
+            <div style={{ width: "220px", flexShrink: 0, borderLeft: "1px solid #3c434a", padding: "14px", overflowY: "auto" }}>
+              {selected.mimeType.startsWith("image/")
+                ? <img src={selected.url} alt={selected.title} style={{ width: "100%", borderRadius: "3px", marginBottom: "12px" }} />
+                : <div style={{ height: "80px", display: "flex", alignItems: "center", justifyContent: "center", background: "#2c3338", borderRadius: "3px", marginBottom: "12px" }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8c8f94" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  </div>
+              }
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "#e0e0e0", marginBottom: "6px", wordBreak: "break-all" }}>{selected.title || selected.filename}</div>
+              <div style={{ fontSize: "11px", color: "#8c8f94", marginBottom: "12px" }}>{selected.mimeType}</div>
+              <label style={{ fontSize: "11px", color: "#8c8f94", display: "block", marginBottom: "4px" }}>URL</label>
+              <input type="text" readOnly value={selected.url} onClick={e => (e.target as HTMLInputElement).select()}
+                style={{ width: "100%", fontSize: "10px", padding: "5px 7px", background: "#2c3338", border: "1px solid #3c434a", borderRadius: "3px", color: "#a7aaad", boxSizing: "border-box" }} />
+              <button
+                onClick={() => { onSelect(selected.url); onClose(); }}
+                style={{ width: "100%", marginTop: "12px", padding: "8px", background: "#2271b1", border: "none", borderRadius: "4px", color: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
+              >
+                Select
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Block Content Panels (data/media/text settings) ──────────────────────────
-function BlockContent({ block, onChange, forms }: { block: Block; onChange: (props: Record<string, unknown>) => void; forms?: FormOption[] }) {
+function BlockContent({ block, onChange, forms, openMediaPicker }: { block: Block; onChange: (props: Record<string, unknown>) => void; forms?: FormOption[]; openMediaPicker?: (cb: (url: string) => void) => void }) {
   const p = block.props;
   const set = (key: string) => (val: unknown) => onChange({ ...p, [key]: val });
 
@@ -303,7 +543,17 @@ function BlockContent({ block, onChange, forms }: { block: Block; onChange: (pro
 
     case "image":
       return <>
-        <Field name="Image URL"><Inp value={String(p.src || "")} onChange={set("src")} type="url" placeholder="https://…" /></Field>
+        <div style={fld}>
+          <label style={lbl}>Image</label>
+          {!!p.src && <img src={String(p.src)} alt="" style={{ width: "100%", maxHeight: "120px", objectFit: "cover", borderRadius: "3px", marginBottom: "8px", display: "block" }} />}
+          <button
+            onClick={() => openMediaPicker?.(url => onChange({ ...p, src: url }))}
+            style={{ width: "100%", padding: "8px", background: "#2c3338", border: "1px dashed #50575e", borderRadius: "4px", color: "#72aee6", cursor: "pointer", fontSize: "12px", marginBottom: "6px" }}
+          >
+            {p.src ? "Replace Image" : "Choose from Media Library"}
+          </button>
+          <Inp value={String(p.src || "")} onChange={set("src")} type="url" placeholder="Or paste URL…" />
+        </div>
         <Field name="Alt Text"><Inp value={String(p.alt || "")} onChange={set("alt")} placeholder="Describe the image" /></Field>
         <p style={{ fontSize: "11px", color: "#8c8f94", margin: "0", lineHeight: 1.6 }}>Click the caption on canvas to edit it directly.</p>
       </>;
@@ -369,6 +619,36 @@ function BlockContent({ block, onChange, forms }: { block: Block; onChange: (pro
       </>;
     }
 
+    case "query-loop": {
+      const toggles: [string, string][] = [["showImage", "Featured Image"], ["showDate", "Date"], ["showExcerpt", "Excerpt"], ["showAuthor", "Author"], ["showCategory", "Category"]];
+      return <>
+        <Field name="Post Type">
+          <select style={inp} value={String(p.postType || "post")} onChange={e => set("postType")(e.target.value)}>
+            <option value="post">Posts</option>
+            <option value="page">Pages</option>
+          </select>
+        </Field>
+        <Field name="Posts Per Page">
+          <input type="number" style={inp} value={Number(p.perPage) || 6} min={1} max={48} onChange={e => set("perPage")(Number(e.target.value))} />
+        </Field>
+        <Field name="Order By">
+          <Sel value={String(p.orderBy || "date")} onChange={set("orderBy")} options={[{ value: "date", label: "Date" }, { value: "title", label: "Title" }, { value: "modified", label: "Last Modified" }, { value: "rand", label: "Random" }]} />
+        </Field>
+        <Field name="Order">
+          <Sel value={String(p.order || "DESC")} onChange={set("order")} options={[{ value: "DESC", label: "Newest First" }, { value: "ASC", label: "Oldest First" }]} />
+        </Field>
+        <div style={fld}>
+          <label style={{ ...lbl, marginBottom: "8px" }}>Card Elements</label>
+          {toggles.map(([key, label]) => (
+            <label key={key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", cursor: "pointer" }}>
+              <input type="checkbox" checked={p[key] !== false} onChange={e => set(key)(e.target.checked)} style={{ accentColor: "#72aee6" }} />
+              <span style={{ fontSize: "12px", color: "#a7aaad" }}>{label}</span>
+            </label>
+          ))}
+        </div>
+      </>;
+    }
+
     default:
       return <p style={{ color: "#8c8f94", fontSize: "12px" }}>No content settings.</p>;
   }
@@ -426,9 +706,77 @@ function BlockStyle({ block, onChange }: { block: Block; onChange: (props: Recor
         <Field name="Thickness (px)"><input type="number" style={inp} value={Number(p.thickness) || 1} min={1} max={16} onChange={e => set("thickness")(Number(e.target.value))} /></Field>
       </>;
 
+    case "query-loop":
+      return <>
+        <Field name="Columns">
+          <Sel value={String(p.columns || "3")} onChange={v => set("columns")(Number(v))} options={[{ value: "1", label: "1 Column" }, { value: "2", label: "2 Columns" }, { value: "3", label: "3 Columns" }, { value: "4", label: "4 Columns" }]} />
+        </Field>
+        <Field name="Card Gap"><Inp value={String(p.gap || "24px")} onChange={set("gap")} placeholder="24px" /></Field>
+        <Field name="Image Height (px)">
+          <input type="number" style={inp} value={Number(p.imageHeight) || 200} min={80} max={600} step={20} onChange={e => set("imageHeight")(Number(e.target.value))} />
+        </Field>
+        <ColorField name="Card Background" value={String(p.cardBg || "#ffffff")} onChange={set("cardBg")} />
+        <ColorField name="Card Border" value={String(p.cardBorder || "#e2e8f0")} onChange={set("cardBorder")} />
+        <Field name="Card Border Radius"><Inp value={String(p.cardRadius || "8px")} onChange={set("cardRadius")} placeholder="8px" /></Field>
+        <Field name="Section Padding"><Inp value={String(p.padding || "5rem 48px")} onChange={set("padding")} placeholder="5rem 48px" /></Field>
+      </>;
+
     default:
       return <p style={{ color: "#8c8f94", fontSize: "12px" }}>No style settings for this block.</p>;
   }
+}
+
+// ─── Block Advanced Panel ──────────────────────────────────────────────────────
+function BlockAdvanced({ block, onChange }: { block: Block; onChange: (props: Record<string, unknown>) => void }) {
+  const p = block.props;
+  const set = (key: string) => (val: unknown) => onChange({ ...p, [key]: val });
+  const extensions = getBlockPanelExtensions(block.type);
+
+  return (
+    <>
+      <Field name="CSS Class">
+        <Inp value={String(p._cssClass || "")} onChange={set("_cssClass")} placeholder="my-class another-class" />
+      </Field>
+      <Field name="HTML Element">
+        <Sel value={String(p._element || "section")} onChange={set("_element")} options={[
+          { value: "section", label: "section" },
+          { value: "div", label: "div" },
+          { value: "article", label: "article" },
+          { value: "aside", label: "aside" },
+          { value: "header", label: "header" },
+          { value: "footer", label: "footer" },
+          { value: "main", label: "main" },
+        ]} />
+      </Field>
+      <Field name="Entrance Animation">
+        <Sel value={String(p._animation || "none")} onChange={set("_animation")} options={[
+          { value: "none", label: "None" },
+          { value: "ap-fade-in", label: "Fade In" },
+          { value: "ap-slide-up", label: "Slide Up" },
+          { value: "ap-slide-left", label: "Slide from Left" },
+          { value: "ap-slide-right", label: "Slide from Right" },
+          { value: "ap-zoom-in", label: "Zoom In" },
+        ]} />
+      </Field>
+      <div style={fld}>
+        <label style={lbl}>Custom CSS</label>
+        <textarea
+          style={{ ...inp, fontFamily: "monospace", fontSize: "11px", resize: "vertical", lineHeight: 1.5 }}
+          rows={8}
+          value={String(p._customCss || "")}
+          onChange={e => set("_customCss")(e.target.value)}
+          placeholder={`.ap-block {\n  /* your styles */\n}`}
+        />
+        <div style={{ fontSize: "10px", color: "#646970", marginTop: "4px" }}>Applied to this block via a scoped &lt;style&gt; tag.</div>
+      </div>
+      {extensions.length > 0 && extensions.map(ext => (
+        <div key={ext.id}>
+          <div style={{ fontWeight: 700, fontSize: "11px", color: "#8c8f94", textTransform: "uppercase", letterSpacing: "0.5px", margin: "16px 0 10px", borderTop: "1px solid #3c434a", paddingTop: "12px" }}>{ext.label}</div>
+          {ext.render(block, onChange)}
+        </div>
+      ))}
+    </>
+  );
 }
 
 // ─── Global Theme Panel ────────────────────────────────────────────────────────
@@ -454,14 +802,141 @@ function ThemePanel({ tokens, onChange }: { tokens: ThemeTokens; onChange: (t: T
   );
 }
 
-// ─── Main Editor ──────────────────────────────────────────────────────────────
-type LeftPanel = "palette" | "block" | "theme";
-type BlockTab = "content" | "style";
+// ─── Conditions Panel ─────────────────────────────────────────────────────────
+const RULES_WITH_VALUE: ConditionRule[] = ["post_type", "singular", "archive_type"];
 
-export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTokens, forms = [], isTemplate = false, templatePart, siteUrl = "" }: Props) {
+function ConditionsPanel({ templateId, conditions, onChange }: {
+  templateId: string;
+  conditions: DisplayCondition[];
+  onChange: (c: DisplayCondition[]) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [postTypes, setPostTypes] = useState<{ key: string; label: string }[]>([]);
+  const [taxonomies, setTaxonomies] = useState<{ key: string; label: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/post-types").then(r => r.json()).then((data: any) => {
+      const builtIn = [
+        { key: "post", label: "Posts" },
+        { key: "page", label: "Pages" },
+      ];
+      const arr: any[] = Array.isArray(data) ? data : [];
+      const custom = arr.map((pt: any) => ({ key: pt.key ?? pt.slug, label: pt.label ?? pt.key ?? pt.slug }));
+      setPostTypes([...builtIn, ...custom]);
+    }).catch(() => {});
+
+    fetch("/api/taxonomies").then(r => r.json()).then((data: any) => {
+      const builtIn = [
+        { key: "category", label: "Categories" },
+        { key: "post_tag", label: "Tags" },
+      ];
+      const arr: any[] = Array.isArray(data) ? data : [];
+      const custom = arr.map((tx: any) => ({ key: tx.key ?? tx.slug, label: tx.label ?? tx.key ?? tx.slug }));
+      setTaxonomies([...builtIn, ...custom]);
+    }).catch(() => {});
+  }, []);
+
+  const addCondition = () => onChange([...conditions, { rule: "entire_site" as ConditionRule }]);
+  const removeCondition = (i: number) => onChange(conditions.filter((_, idx) => idx !== i));
+  const updateRule = (i: number, rule: ConditionRule) => {
+    const next = [...conditions];
+    next[i] = { rule, value: RULES_WITH_VALUE.includes(rule) ? (next[i].value ?? "") : undefined };
+    onChange(next);
+  };
+  const updateValue = (i: number, value: string) => {
+    const next = [...conditions];
+    next[i] = { ...next[i], value };
+    onChange(next);
+  };
+
+  const saveConditions = async () => {
+    setSaving(true);
+    try {
+      await fetch(`/api/themes/templates/${templateId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conditions }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally { setSaving(false); }
+  };
+
+  const renderValueField = (cond: DisplayCondition, i: number) => {
+    if (cond.rule === "post_type") {
+      return (
+        <div style={{ marginBottom: "6px" }}>
+          <label style={lbl}>Post Type</label>
+          <select style={inp} value={cond.value ?? ""} onChange={e => updateValue(i, e.target.value)}>
+            <option value="">— select —</option>
+            {postTypes.map(pt => <option key={pt.key} value={pt.key}>{pt.label}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (cond.rule === "archive_type") {
+      return (
+        <div style={{ marginBottom: "6px" }}>
+          <label style={lbl}>Taxonomy</label>
+          <select style={inp} value={cond.value ?? ""} onChange={e => updateValue(i, e.target.value)}>
+            <option value="">— select —</option>
+            {taxonomies.map(tx => <option key={tx.key} value={tx.key}>{tx.label}</option>)}
+          </select>
+        </div>
+      );
+    }
+    // singular — free text slug
+    return (
+      <div style={{ marginBottom: "6px" }}>
+        <label style={lbl}>Slug</label>
+        <input style={inp} type="text" value={cond.value ?? ""} onChange={e => updateValue(i, e.target.value)} placeholder="e.g. about, contact" />
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: "11px", color: "#8c8f94", marginBottom: "14px", lineHeight: 1.6 }}>
+        Control where this template is displayed. The template shows when <strong style={{ color: "#a7aaad" }}>any</strong> condition matches.
+      </div>
+      {conditions.length === 0 && (
+        <div style={{ color: "#8c8f94", fontSize: "12px", textAlign: "center", padding: "16px 0" }}>No conditions — template will not render.</div>
+      )}
+      {conditions.map((cond, i) => (
+        <div key={i} style={{ marginBottom: "10px", background: "#1d2327", border: "1px solid #3c434a", borderRadius: "4px", padding: "10px" }}>
+          <div style={{ marginBottom: "6px" }}>
+            <label style={lbl}>Rule</label>
+            <select style={inp} value={cond.rule} onChange={e => updateRule(i, e.target.value as ConditionRule)}>
+              {(Object.keys(CONDITION_RULE_LABELS) as ConditionRule[]).map(r => (
+                <option key={r} value={r}>{CONDITION_RULE_LABELS[r]}</option>
+              ))}
+            </select>
+          </div>
+          {RULES_WITH_VALUE.includes(cond.rule) && renderValueField(cond, i)}
+          <button onClick={() => removeCondition(i)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "12px", padding: 0 }}>✕ Remove</button>
+        </div>
+      ))}
+      <button onClick={addCondition} style={{ width: "100%", padding: "8px", background: "transparent", border: "1px dashed #50575e", borderRadius: "4px", color: "#8c8f94", cursor: "pointer", fontSize: "12px", marginBottom: "14px" }}>+ Add Condition</button>
+      <button onClick={saveConditions} disabled={saving} style={{ width: "100%", padding: "8px", background: "#2271b1", border: "1px solid #0a4b78", borderRadius: "4px", color: "#fff", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
+        {saving ? "Saving…" : saved ? "Saved ✓" : "Save Conditions"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Editor ──────────────────────────────────────────────────────────────
+type LeftPanel = "palette" | "block" | "theme" | "conditions";
+type BlockTab = "content" | "style" | "advanced";
+
+export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTokens, forms = [], isTemplate = false, templatePart, templateId, initialConditions = [], siteUrl = "" }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [tokens, setTokens] = useState<ThemeTokens>(initialTokens);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [dragPos, setDragPos] = useState<"before" | "after">("after");
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [paletteTab, setPaletteTab] = useState<"elements" | "navigator">("elements");
   const [leftPanel, setLeftPanel] = useState<LeftPanel>("palette");
@@ -473,6 +948,26 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
   const [aiMode, setAiMode] = useState<"append" | "replace">("append");
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState(false);
+  const [conditions, setConditions] = useState<DisplayCondition[]>(initialConditions);
+  const [mediaPicker, setMediaPicker] = useState<{ onSelect: (url: string) => void } | null>(null);
+
+  const openMediaPicker = useCallback((onSelect: (url: string) => void) => {
+    setMediaPicker({ onSelect });
+  }, []);
+
+  // ── Library state ───────────────────────────────────────────────────────────
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [libTab, setLibTab] = useState<"blocks" | "pages" | "my">("blocks");
+  const [libSearch, setLibSearch] = useState("");
+  const [libCategory, setLibCategory] = useState<LibraryCategory>("All");
+  const [libFavsOnly, setLibFavsOnly] = useState(false);
+  const [libSortPages, setLibSortPages] = useState<"popular" | "new">("popular");
+  const [libFavorites, setLibFavorites] = useState<Set<string>>(new Set());
+  const [myTemplates, setMyTemplates] = useState<UserTemplate[]>([]);
+  const [myTemplatesLoaded, setMyTemplatesLoaded] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const palette = isTemplate ? TEMPLATE_PALETTE : CONTENT_PALETTE;
   const selectedBlock = blocks.find(b => b.id === selectedId) ?? null;
@@ -529,6 +1024,21 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
     setLeftPanel("block");
   }, []);
 
+  const reorderBlock = useCallback((fromId: string, toId: string, pos: "before" | "after") => {
+    setBlocks(prev => {
+      const fi = prev.findIndex(b => b.id === fromId);
+      const ti = prev.findIndex(b => b.id === toId);
+      if (fi === -1 || ti === -1 || fi === ti) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fi, 1);
+      const insertAt = pos === "before"
+        ? (fi < ti ? ti - 1 : ti)
+        : (fi < ti ? ti : ti + 1);
+      next.splice(Math.max(0, insertAt), 0, moved);
+      return next;
+    });
+  }, []);
+
   const duplicateBlock = useCallback((id: string) => {
     setBlocks(prev => {
       const i = prev.findIndex(b => b.id === id);
@@ -539,6 +1049,118 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
     });
   }, []);
 
+  // ── Library handlers ────────────────────────────────────────────────────────
+  const insertTemplate = useCallback((templateBlocks: Block[]) => {
+    const cloned = templateBlocks.map(bl => ({ ...bl, id: uid(), props: { ...bl.props } }));
+    setBlocks(prev => {
+      if (selectedId) {
+        const idx = prev.findIndex(b => b.id === selectedId);
+        const next = [...prev];
+        next.splice(idx + 1, 0, ...cloned);
+        return next;
+      }
+      return [...prev, ...cloned];
+    });
+    setShowLibrary(false);
+    if (cloned.length > 0) selectBlock(cloned[0].id);
+  }, [selectedId, selectBlock]);
+
+  const replaceWithTemplate = useCallback((templateBlocks: Block[]) => {
+    if (!confirm("Replace the entire page with this template? This cannot be undone.")) return;
+    const cloned = templateBlocks.map(bl => ({ ...bl, id: uid(), props: { ...bl.props } }));
+    setBlocks(cloned);
+    setShowLibrary(false);
+    deselectBlock();
+  }, [deselectBlock]);
+
+  const loadMyTemplates = useCallback(async () => {
+    if (myTemplatesLoaded) return;
+    try {
+      const res = await fetch("/api/themes/library");
+      const data = await res.json() as any;
+      setMyTemplates(data.templates ?? []);
+      setMyTemplatesLoaded(true);
+    } catch { /* silent */ }
+  }, [myTemplatesLoaded]);
+
+  const saveAsMyTemplate = async () => {
+    if (!saveTemplateName.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch("/api/themes/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: saveTemplateName.trim(), blocks }),
+      });
+      const data = await res.json() as any;
+      if (res.ok) {
+        setMyTemplates(prev => [...prev, data.template]);
+        setSaveTemplateName("");
+        setShowSaveForm(false);
+      }
+    } finally { setSavingTemplate(false); }
+  };
+
+  const deleteMyTemplate = async (id: string) => {
+    if (!confirm("Delete this saved template?")) return;
+    await fetch(`/api/themes/library/${id}`, { method: "DELETE" });
+    setMyTemplates(prev => prev.filter(t => t.id !== id));
+  };
+
+  const toggleFavorite = useCallback((id: string) => {
+    setLibFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem("ap_lib_favs", JSON.stringify([...next])); } catch { /* silent */ }
+      return next;
+    });
+  }, []);
+
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("ap_lib_favs") || "[]");
+      setLibFavorites(new Set(saved));
+    } catch { /* silent */ }
+  }, []);
+
+  // Delete selected block on Delete / Backspace key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selectedId) return;
+      const tgt = e.target as HTMLElement;
+      if (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteBlock(selectedId);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, deleteBlock]);
+
+  const filteredLibBlocks = useMemo(() => {
+    let items = LIBRARY_BLOCKS;
+    if (libCategory !== "All") items = items.filter(t => t.category === libCategory);
+    if (libFavsOnly) items = items.filter(t => libFavorites.has(t.id));
+    if (libSearch) {
+      const q = libSearch.toLowerCase();
+      items = items.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
+    }
+    return items;
+  }, [libCategory, libFavsOnly, libSearch, libFavorites]);
+
+  const filteredLibPages = useMemo(() => {
+    let items = [...LIBRARY_PAGES];
+    if (libFavsOnly) items = items.filter(t => libFavorites.has(t.id));
+    if (libSearch) {
+      const q = libSearch.toLowerCase();
+      items = items.filter(t => t.name.toLowerCase().includes(q) || t.industry.toLowerCase().includes(q));
+    }
+    if (libSortPages === "popular") items.sort((a, b) => b.popularity - a.popularity);
+    return items;
+  }, [libFavsOnly, libSearch, libSortPages, libFavorites]);
+
   const save = async () => {
     setSaving(true);
     try {
@@ -547,11 +1169,11 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ version: 1, blocks }),
         }),
-        !isTemplate && fetch("/api/themes/config", {
+        fetch("/api/themes/config", {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(tokens),
         }),
-      ].filter(Boolean));
+      ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally { setSaving(false); }
@@ -566,7 +1188,7 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: aiPrompt, currentBlocks: aiMode === "append" ? blocks : [] }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (!res.ok || data.error) { setAiError(true); return; }
       setBlocks(aiMode === "replace" ? data.blocks : [...blocks, ...data.blocks]);
       setAiPrompt(""); setShowAI(false);
@@ -575,7 +1197,9 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
   };
 
   const canvasWidth = device === "desktop" ? "100%" : device === "tablet" ? "768px" : "390px";
-  const templateLabel = templatePart === "header" ? "Header Template" : templatePart === "footer" ? "Footer Template" : pageTitle;
+  const templateLabel = isTemplate && templatePart
+    ? (TEMPLATE_TYPE_LABELS[templatePart] ?? templatePart) + " Template"
+    : pageTitle;
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const S = {
@@ -593,6 +1217,24 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
 
   // ── Left Panel Content ────────────────────────────────────────────────────
   function renderLeft() {
+    // ── Conditions Mode (templates only) ──
+    if (leftPanel === "conditions" && isTemplate && templateId) {
+      return (
+        <>
+          <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #3c434a", padding: "0" }}>
+            <button onClick={() => setLeftPanel("palette")} style={{ ...S.backBtn, padding: "12px 16px", borderBottom: "none", width: "auto", flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+              Back
+            </button>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "#e0e0e0", flex: 1, textAlign: "center", paddingRight: "16px" }}>Display Conditions</span>
+          </div>
+          <div style={S.panelBody}>
+            <ConditionsPanel templateId={templateId} conditions={conditions} onChange={setConditions} />
+          </div>
+        </>
+      );
+    }
+
     // ── Theme Mode ──
     if (leftPanel === "theme") {
       return (
@@ -625,19 +1267,27 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
             <span style={{ fontSize: "11px", fontWeight: 700, color: "#72aee6", flex: 1, textAlign: "center", paddingRight: "8px", textTransform: "capitalize" }}>{blockLabel}</span>
           </div>
 
-          {/* Content / Style tabs */}
+          {/* Content / Style / Advanced tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid #3c434a", flexShrink: 0 }}>
             <button style={S.tab(blockTab === "content")} onClick={() => setBlockTab("content")}>Content</button>
             <button style={S.tab(blockTab === "style")} onClick={() => setBlockTab("style")}>Style</button>
+            <button style={S.tab(blockTab === "advanced")} onClick={() => setBlockTab("advanced")}>Advanced</button>
           </div>
 
           {/* Panel body */}
           <div style={S.panelBody}>
             {blockTab === "content"
-              ? <BlockContent block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} forms={forms} />
-              : <BlockStyle block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} />
+              ? <BlockContent block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} forms={forms} openMediaPicker={openMediaPicker} />
+              : blockTab === "style"
+              ? <BlockStyle block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} />
+              : <BlockAdvanced block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} />
             }
           </div>
+
+          {/* Custom CSS injection for this block */}
+          {selectedBlock.props._customCss && (
+            <style dangerouslySetInnerHTML={{ __html: String(selectedBlock.props._customCss) }} />
+          )}
 
           {/* Block actions footer */}
           <div style={{ padding: "12px 16px", borderTop: "1px solid #3c434a", display: "flex", gap: "6px", flexShrink: 0 }}>
@@ -672,18 +1322,42 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
           ) : (
             <div>
               {blocks.length === 0 && <p style={{ color: "#8c8f94", fontSize: "12px" }}>No blocks yet. Add from Elements.</p>}
-              {blocks.map((b, i) => (
+              {blocks.map((b, i) => {
+                const isNavDragOver = dragOverId === b.id && dragId !== b.id;
+                const isNavDragging = dragId === b.id;
+                return (
                 <div key={b.id}
+                  draggable
+                  onDragStart={e => { setDragId(b.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                  onDragOver={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!dragId || dragId === b.id) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setDragOverId(b.id);
+                    setDragPos(e.clientY < rect.top + rect.height / 2 ? "before" : "after");
+                  }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (dragId && dragId !== b.id) reorderBlock(dragId, b.id, dragPos);
+                    setDragId(null); setDragOverId(null);
+                  }}
                   onClick={() => selectBlock(b.id)}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", marginBottom: "3px", borderRadius: "4px", background: selectedId === b.id ? "#0a4b78" : "transparent", cursor: "pointer", border: `1px solid ${selectedId === b.id ? "#2271b1" : "transparent"}` }}>
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", marginBottom: "3px",
+                    borderRadius: "4px", cursor: "grab",
+                    background: selectedId === b.id ? "#0a4b78" : "transparent",
+                    border: `1px solid ${selectedId === b.id ? "#2271b1" : "transparent"}`,
+                    opacity: isNavDragging ? 0.35 : 1,
+                    boxShadow: isNavDragOver ? (dragPos === "before" ? "inset 0 3px 0 0 #2271b1" : "inset 0 -3px 0 0 #2271b1") : "none",
+                  }}>
+                  <span style={{ fontSize: "14px", color: "#555d66", cursor: "grab", flexShrink: 0 }}>⠿</span>
                   <span style={{ fontSize: "10px", color: "#646970", width: "16px", textAlign: "right", flexShrink: 0 }}>{i + 1}</span>
                   <span style={{ fontSize: "12px", fontWeight: 600, flex: 1, textTransform: "capitalize", color: "#e0e0e0" }}>{b.type.replace(/-/g, " ")}</span>
-                  <div style={{ display: "flex", gap: "1px" }}>
-                    <button onClick={e => { e.stopPropagation(); moveBlock(b.id, "up"); }} style={{ background: "none", border: "none", color: "#8c8f94", cursor: "pointer", padding: "2px 5px", fontSize: "11px" }} disabled={i === 0}>▲</button>
-                    <button onClick={e => { e.stopPropagation(); moveBlock(b.id, "down"); }} style={{ background: "none", border: "none", color: "#8c8f94", cursor: "pointer", padding: "2px 5px", fontSize: "11px" }} disabled={i === blocks.length - 1}>▼</button>
-                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -695,9 +1369,17 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
     <div style={S.root}>
       {/* Toolbar */}
       <div style={S.toolbar}>
-        <a href="/admin/themes" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Themes</a>
+        {isTemplate ? (
+          <a href="/admin/themes/builder" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Builder</a>
+        ) : (
+          <a href="/admin/themes" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Themes</a>
+        )}
         <div style={{ width: "1px", height: "20px", background: "#3c434a", flexShrink: 0 }} />
-        {isTemplate && <span style={{ fontSize: "11px", background: "#7c3aed", color: "#fff", padding: "2px 8px", borderRadius: "3px", fontWeight: 600, flexShrink: 0 }}>{templatePart?.toUpperCase()}</span>}
+        {isTemplate && templatePart && (
+          <span style={{ fontSize: "11px", background: "#7c3aed", color: "#fff", padding: "2px 8px", borderRadius: "3px", fontWeight: 600, flexShrink: 0 }}>
+            {(TEMPLATE_TYPE_LABELS[templatePart] ?? templatePart).toUpperCase()}
+          </span>
+        )}
         <span style={{ fontSize: "13px", fontWeight: 600, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>{templateLabel}</span>
         <div style={{ flex: 1 }} />
 
@@ -721,6 +1403,24 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
             Global Style
           </button>
         )}
+
+        {/* Conditions button (templates with registered ID only) */}
+        {isTemplate && templateId && (
+          <button
+            style={{ ...S.btn(), background: leftPanel === "conditions" ? "#50575e" : "#3c434a", border: leftPanel === "conditions" ? `1px solid #72aee6` : "1px solid #50575e", flexShrink: 0 }}
+            onClick={() => { setLeftPanel(leftPanel === "conditions" ? "palette" : "conditions"); setSelectedId(null); }}
+          >
+            Conditions{conditions.length > 0 ? ` (${conditions.length})` : ""}
+          </button>
+        )}
+
+        {/* Library */}
+        <button
+          style={{ ...S.btn(), flexShrink: 0 }}
+          onClick={() => { setShowLibrary(true); if (libTab === "my") loadMyTemplates(); }}
+        >
+          Library
+        </button>
 
         {/* AI Generate */}
         {!isTemplate && (
@@ -755,24 +1455,73 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
             )}
             {blocks.map((block, i) => {
               const isSelected = selectedId === block.id;
+              const isDragging = dragId === block.id;
+              const isDragOver = dragOverId === block.id;
+              const isHovered = hoveredBlockId === block.id;
               return (
                 <div key={block.id}
+                  onMouseEnter={() => setHoveredBlockId(block.id)}
+                  onMouseLeave={() => setHoveredBlockId(null)}
+                  onDragOver={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!dragId) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setDragOverId(block.id);
+                    setDragPos(e.clientY < rect.top + rect.height / 2 ? "before" : "after");
+                  }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null); }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (dragId && dragId !== block.id) reorderBlock(dragId, block.id, dragPos);
+                    setDragId(null); setDragOverId(null);
+                  }}
                   onClick={e => { e.stopPropagation(); selectBlock(block.id); }}
-                  style={{ position: "relative", outline: isSelected ? "2px solid #2271b1" : "2px solid transparent", outlineOffset: "-2px", cursor: "default", transition: "outline-color 0.1s" }}>
-                  <BlockPreview block={block} tokens={tokens} forms={forms} isSelected={isSelected}
-                    onPropChange={(key, val) => updateBlock(block.id, { ...block.props, [key]: val })}
-                    onReplace={newBlock => replaceBlock(block.id, newBlock)}
-                  />
+                  style={{
+                    position: "relative",
+                    outline: isSelected ? "2px solid #2271b1" : "2px solid transparent",
+                    outlineOffset: "-2px",
+                    opacity: isDragging ? 0.35 : 1,
+                    transition: "outline-color 0.1s, opacity 0.15s",
+                    boxShadow: isDragOver
+                      ? (dragPos === "before" ? "inset 0 3px 0 0 #2271b1" : "inset 0 -3px 0 0 #2271b1")
+                      : "none",
+                  }}>
+
+                  {/* Drag handle — visible on hover/select */}
+                  <div
+                    draggable
+                    onDragStart={e => { e.stopPropagation(); setDragId(block.id); e.dataTransfer.effectAllowed = "move"; }}
+                    onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                    title="Drag to reorder"
+                    style={{
+                      position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)",
+                      width: "22px", zIndex: 20, cursor: "grab",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      opacity: isSelected || isHovered ? 1 : 0,
+                      transition: "opacity 0.15s",
+                      color: "#2271b1", fontSize: "15px", userSelect: "none",
+                      padding: "10px 3px", lineHeight: 1,
+                    }}
+                  >⠿</div>
+
+                  {!!block.props._customCss && <style dangerouslySetInnerHTML={{ __html: String(block.props._customCss) }} />}
+                  <div className={block.props._cssClass ? String(block.props._cssClass) : undefined}
+                    data-animation={block.props._animation && block.props._animation !== "none" ? String(block.props._animation) : undefined}>
+                    <BlockPreview block={block} tokens={tokens} forms={forms} isSelected={isSelected}
+                      onPropChange={(key, val) => updateBlock(block.id, { ...block.props, [key]: val })}
+                      onReplace={newBlock => replaceBlock(block.id, newBlock)}
+                    />
+                  </div>
                   {isSelected && (
                     <>
-                      <div style={{ position: "absolute", top: "8px", left: "8px", background: "#2271b1", color: "#fff", fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", textTransform: "capitalize", pointerEvents: "none", letterSpacing: "0.3px" }}>
+                      <div style={{ position: "absolute", top: "8px", left: "28px", background: "#2271b1", color: "#fff", fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "3px", textTransform: "capitalize", pointerEvents: "none", letterSpacing: "0.3px" }}>
                         {block.type.replace(/-/g, " ")}
                       </div>
                       <div style={{ position: "absolute", top: "8px", right: "8px", display: "flex", gap: "4px", zIndex: 10 }}>
                         <button onClick={e => { e.stopPropagation(); moveBlock(block.id, "up"); }} style={{ background: "#fff", border: "1px solid #dcdcde", borderRadius: "3px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", color: "#1d2327" }} disabled={i === 0}>▲</button>
                         <button onClick={e => { e.stopPropagation(); moveBlock(block.id, "down"); }} style={{ background: "#fff", border: "1px solid #dcdcde", borderRadius: "3px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", color: "#1d2327" }} disabled={i === blocks.length - 1}>▼</button>
                         <button onClick={e => { e.stopPropagation(); duplicateBlock(block.id); }} style={{ background: "#fff", border: "1px solid #dcdcde", borderRadius: "3px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", color: "#1d2327" }} title="Duplicate">⧉</button>
-                        <button onClick={e => { e.stopPropagation(); deleteBlock(block.id); }} style={{ background: "#fff", border: "1px solid #d63638", borderRadius: "3px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", color: "#d63638" }} title="Delete">✕</button>
+                        <button onClick={e => { e.stopPropagation(); deleteBlock(block.id); }} style={{ background: "#fff", border: "1px solid #d63638", borderRadius: "3px", padding: "4px 8px", cursor: "pointer", fontSize: "12px", color: "#d63638" }} title="Delete (Del)">✕</button>
                       </div>
                     </>
                   )}
@@ -809,6 +1558,267 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
           </div>
         </div>
       )}
+
+      {/* ── Library Modal ─────────────────────────────────────────────────── */}
+      {showLibrary && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowLibrary(false)}>
+          <div style={{ background: "#1d2327", border: "1px solid #3c434a", borderRadius: "10px", width: "min(1020px, 95vw)", height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+
+            {/* Library header */}
+            <div style={{ borderBottom: "1px solid #3c434a", padding: "0 20px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", paddingRight: "8px" }}>Library</span>
+              <div style={{ display: "flex", flex: 1 }}>
+                {(["blocks", "pages", "my"] as const).map(t => (
+                  <button key={t} onClick={() => { setLibTab(t); if (t === "my") loadMyTemplates(); }} style={{ ...S.tab(libTab === t), flex: "none", padding: "14px 20px", fontSize: "13px", textTransform: "capitalize", letterSpacing: "0.2px" }}>
+                    {t === "blocks" ? "Blocks" : t === "pages" ? "Pages" : "My Templates"}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setShowLibrary(false)} style={{ background: "none", border: "none", color: "#8c8f94", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* Filter bar */}
+            <div style={{ padding: "10px 20px", borderBottom: "1px solid #3c434a", display: "flex", alignItems: "center", gap: "10px", flexShrink: 0, flexWrap: "wrap" as const }}>
+              {libTab === "blocks" && (
+                <>
+                  {/* Category dropdown */}
+                  <div style={{ position: "relative" as const, display: "flex", alignItems: "center", gap: "4px", background: "#2c3338", border: "1px solid #3c434a", borderRadius: "4px", padding: "0 8px", height: "32px" }}>
+                    <select
+                      value={libCategory}
+                      onChange={e => setLibCategory(e.target.value as LibraryCategory)}
+                      style={{ background: "none", border: "none", color: "#e0e0e0", fontSize: "12px", cursor: "pointer", outline: "none", paddingRight: "4px" }}
+                    >
+                      {LIBRARY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {libCategory !== "All" && (
+                      <button onClick={() => setLibCategory("All")} style={{ background: "none", border: "none", color: "#8c8f94", cursor: "pointer", fontSize: "14px", padding: 0, lineHeight: 1 }}>×</button>
+                    )}
+                  </div>
+                  {/* Favorites toggle */}
+                  <button
+                    onClick={() => setLibFavsOnly(v => !v)}
+                    style={{ height: "32px", padding: "0 12px", background: libFavsOnly ? "#3c434a" : "none", border: "1px solid #3c434a", borderRadius: "4px", color: libFavsOnly ? "#fff" : "#8c8f94", cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}
+                  >
+                    <span style={{ color: "#f87171", fontSize: "13px" }}>{libFavsOnly ? "♥" : "♡"}</span> Favorites
+                  </button>
+                </>
+              )}
+              {libTab === "pages" && (
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {(["popular", "new"] as const).map(s => (
+                    <button key={s} onClick={() => setLibSortPages(s)} style={{ height: "30px", padding: "0 12px", background: libSortPages === s ? "#2271b1" : "none", border: `1px solid ${libSortPages === s ? "#2271b1" : "#3c434a"}`, borderRadius: "4px", color: libSortPages === s ? "#fff" : "#8c8f94", cursor: "pointer", fontSize: "12px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.4px" }}>
+                      {s === "popular" ? "Popular" : "New"}
+                    </button>
+                  ))}
+                  <button onClick={() => setLibFavsOnly(v => !v)} style={{ height: "30px", padding: "0 12px", background: libFavsOnly ? "#3c434a" : "none", border: "1px solid #3c434a", borderRadius: "4px", color: libFavsOnly ? "#fff" : "#8c8f94", cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: "#f87171" }}>{libFavsOnly ? "♥" : "♡"}</span> Favorites
+                  </button>
+                </div>
+              )}
+              {/* Search */}
+              <div style={{ marginLeft: "auto", position: "relative" as const, display: "flex", alignItems: "center" }}>
+                <input
+                  placeholder="Search..."
+                  value={libSearch}
+                  onChange={e => setLibSearch(e.target.value)}
+                  style={{ ...inp, width: "180px", height: "32px", paddingRight: "28px", background: "#2c3338" }}
+                />
+                <span style={{ position: "absolute" as const, right: "8px", color: "#8c8f94", fontSize: "13px", pointerEvents: "none" as const }}>⌕</span>
+              </div>
+            </div>
+
+            {/* Grid content */}
+            <div style={{ flex: 1, overflowY: "auto" as const, padding: "20px" }}>
+              {/* ── Blocks Tab ── */}
+              {libTab === "blocks" && (
+                <>
+                  {filteredLibBlocks.length === 0 && (
+                    <div style={{ textAlign: "center", color: "#8c8f94", padding: "60px 20px", fontSize: "13px" }}>No blocks match your filters.</div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(216px, 1fr))", gap: "12px" }}>
+                    {filteredLibBlocks.map(tmpl => (
+                      <LibraryCard
+                        key={tmpl.id}
+
+                        name={tmpl.name}
+                        badge={tmpl.category}
+                        blocks={tmpl.blocks}
+                        tokens={tokens}
+                        forms={forms}
+                        isFav={libFavorites.has(tmpl.id)}
+                        onToggleFav={() => toggleFavorite(tmpl.id)}
+                        onInsert={() => insertTemplate(tmpl.blocks)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* ── Pages Tab ── */}
+              {libTab === "pages" && (
+                <>
+                  {filteredLibPages.length === 0 && (
+                    <div style={{ textAlign: "center", color: "#8c8f94", padding: "60px 20px", fontSize: "13px" }}>No pages match your filters.</div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(216px, 1fr))", gap: "12px" }}>
+                    {filteredLibPages.map(tmpl => (
+                      <LibraryCard
+                        key={tmpl.id}
+
+                        name={tmpl.name}
+                        badge={tmpl.industry}
+                        blocks={tmpl.blocks}
+                        tokens={tokens}
+                        forms={forms}
+                        isFav={libFavorites.has(tmpl.id)}
+                        onToggleFav={() => toggleFavorite(tmpl.id)}
+                        onInsert={() => insertTemplate(tmpl.blocks)}
+                        onReplace={() => replaceWithTemplate(tmpl.blocks)}
+                        isPage
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* ── My Templates Tab ── */}
+              {libTab === "my" && (
+                <div>
+                  {/* Save current page */}
+                  {!showSaveForm ? (
+                    <button
+                      onClick={() => setShowSaveForm(true)}
+                      style={{ width: "100%", padding: "12px", background: "#2271b1", border: "none", borderRadius: "6px", color: "#fff", fontWeight: 600, fontSize: "13px", cursor: "pointer", marginBottom: "20px" }}
+                    >
+                      + Save Current Page as Template
+                    </button>
+                  ) : (
+                    <div style={{ background: "#2c3338", border: "1px solid #3c434a", borderRadius: "6px", padding: "16px", marginBottom: "20px" }}>
+                      <label style={{ ...lbl, marginBottom: "8px" }}>Template Name</label>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <input
+                          style={{ ...inp, flex: 1 }}
+                          value={saveTemplateName}
+                          onChange={e => setSaveTemplateName(e.target.value)}
+                          placeholder="e.g. My Landing Page"
+                          onKeyDown={e => e.key === "Enter" && saveAsMyTemplate()}
+                          autoFocus
+                        />
+                        <button onClick={saveAsMyTemplate} disabled={savingTemplate || !saveTemplateName.trim()} style={{ ...S.btn(true), flexShrink: 0 }}>
+                          {savingTemplate ? "Saving…" : "Save"}
+                        </button>
+                        <button onClick={() => { setShowSaveForm(false); setSaveTemplateName(""); }} style={{ ...S.btn(), flexShrink: 0 }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {myTemplates.length === 0 && !showSaveForm && (
+                    <div style={{ textAlign: "center", color: "#8c8f94", padding: "40px 20px", fontSize: "13px" }}>
+                      <div style={{ fontSize: "2.5rem", marginBottom: "12px", opacity: 0.3 }}>⊡</div>
+                      No saved templates yet. Build a page and save it here to reuse it later.
+                    </div>
+                  )}
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(216px, 1fr))", gap: "12px" }}>
+                    {myTemplates.map(tmpl => (
+                      <LibraryCard
+                        key={tmpl.id}
+
+                        name={tmpl.name}
+                        badge={new Date(tmpl.createdAt).toLocaleDateString()}
+                        blocks={tmpl.blocks}
+                        tokens={tokens}
+                        forms={forms}
+                        isFav={false}
+                        onInsert={() => insertTemplate(tmpl.blocks)}
+                        onDelete={() => deleteMyTemplate(tmpl.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Media Picker Modal */}
+      {mediaPicker && (
+        <MediaPicker
+          onSelect={mediaPicker.onSelect}
+          onClose={() => setMediaPicker(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Library Card ────────────────────────────────────────────────────────────────
+function LibraryCard({ name, badge, blocks, tokens, forms, isFav, onToggleFav, onInsert, onReplace, onDelete, isPage = false }: {
+  name: string; badge: string; blocks: Block[]; tokens: ThemeTokens; forms: FormOption[];
+  isFav?: boolean; onToggleFav?: () => void; onInsert: () => void; onReplace?: () => void;
+  onDelete?: () => void; isPage?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ border: `1px solid ${hovered ? "#72aee6" : "#3c434a"}`, borderRadius: "6px", overflow: "hidden", cursor: "pointer", background: "#2c3338", transition: "border-color 0.15s" }}
+    >
+      {/* Thumbnail */}
+      <div style={{ position: "relative", height: "152px", overflow: "hidden", background: "#fff" }}>
+        <div style={{ transform: "scale(0.27)", transformOrigin: "top left", width: "800px", pointerEvents: "none", userSelect: "none" }}>
+          {blocks.map((block, i) => (
+            <BlockPreview key={i} block={block} tokens={tokens} forms={forms} />
+          ))}
+        </div>
+
+        {/* Hover overlay */}
+        {hovered && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+            <button
+              onClick={e => { e.stopPropagation(); onInsert(); }}
+              style={{ padding: "8px 16px", background: "#2271b1", border: "none", borderRadius: "4px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            >
+              {isPage ? "Append" : "Insert"}
+            </button>
+            {isPage && onReplace && (
+              <button
+                onClick={e => { e.stopPropagation(); onReplace(); }}
+                style={{ padding: "8px 14px", background: "#3c434a", border: "1px solid #50575e", borderRadius: "4px", color: "#e0e0e0", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+              >
+                Replace
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={e => { e.stopPropagation(); onDelete(); }}
+                style={{ padding: "8px 10px", background: "rgba(214,54,56,0.15)", border: "1px solid #d63638", borderRadius: "4px", color: "#f87171", fontSize: "12px", cursor: "pointer" }}
+                title="Delete"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Favorite button */}
+        {onToggleFav && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleFav(); }}
+            style={{ position: "absolute", top: "6px", right: "6px", background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%", width: "26px", height: "26px", cursor: "pointer", color: isFav ? "#f87171" : "#fff", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+          >
+            {isFav ? "♥" : "♡"}
+          </button>
+        )}
+      </div>
+
+      {/* Label */}
+      <div style={{ padding: "8px 10px" }}>
+        <div style={{ fontSize: "12px", fontWeight: 600, color: "#e0e0e0", marginBottom: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+        <div style={{ fontSize: "10px", color: "#8c8f94" }}>{badge}</div>
+      </div>
     </div>
   );
 }

@@ -11,7 +11,8 @@ export type BlockType =
   | "spacer"
   | "divider"
   | "html"
-  | "ai";
+  | "ai"
+  | "query-loop";
 
 export interface Block {
   id: string;
@@ -53,6 +54,93 @@ export interface Theme {
   createdAt: string;
   updatedAt: string;
 }
+
+export type TemplateType =
+  | "header"
+  | "footer"
+  | "single-post"
+  | "single-page"
+  | "archive"
+  | "404"
+  | "search";
+
+export type ConditionRule =
+  | "entire_site"
+  | "front_page"
+  | "all_posts"
+  | "all_pages"
+  | "post_type"
+  | "singular"
+  | "archive_type";
+
+export interface DisplayCondition {
+  rule: ConditionRule;
+  value?: string; // e.g. "book" for post_type, "/about" for singular
+}
+
+export interface ThemeTemplate {
+  id: string;
+  name: string;
+  type: TemplateType;
+  conditions: DisplayCondition[];
+  schemaSlug: string; // suffix for astropress_page_schema_<schemaSlug>
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Maps each template type to the schemaSlug that is currently active for it */
+export interface TemplateSlots {
+  header?: string;
+  footer?: string;
+  "single-post"?: string;
+  "single-page"?: string;
+  archive?: string;
+  "404"?: string;
+  search?: string;
+}
+
+export interface ThemePackageTemplate {
+  type: TemplateType;
+  name: string;
+  blocks: Block[];
+}
+
+export interface ThemePackagePage {
+  title: string;
+  slug: string;
+  blocks: Block[];
+}
+
+export interface ThemePackage {
+  name: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  preview?: string;
+  tokens: ThemeTokens;
+  templates: ThemePackageTemplate[];
+  pages?: ThemePackagePage[];
+}
+
+export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
+  header: "Header",
+  footer: "Footer",
+  "single-post": "Single Post",
+  "single-page": "Single Page",
+  archive: "Archive",
+  "404": "404 Page",
+  search: "Search Results",
+};
+
+export const CONDITION_RULE_LABELS: Record<ConditionRule, string> = {
+  entire_site: "Entire Site",
+  front_page: "Front Page",
+  all_posts: "All Posts",
+  all_pages: "All Pages",
+  post_type: "Post Type (specify slug)",
+  singular: "Specific Page/Post (specify slug)",
+  archive_type: "Archive (specify taxonomy)",
+};
 
 export const DEFAULT_THEME_TOKENS: ThemeTokens = {
   colors: {
@@ -139,4 +227,22 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, unknown>> = {
   divider: { style: "solid", color: "#e2e8f0", thickness: 1 },
   html: { content: "<!-- Custom HTML here -->" },
   ai: { prompt: "" },
+  "query-loop": {
+    postType: "post",
+    perPage: 6,
+    columns: 3,
+    orderBy: "date",
+    order: "DESC",
+    showImage: true,
+    showDate: true,
+    showExcerpt: true,
+    showAuthor: false,
+    showCategory: true,
+    imageHeight: 200,
+    gap: "24px",
+    cardBg: "#ffffff",
+    cardBorder: "#e2e8f0",
+    cardRadius: "8px",
+    padding: "5rem 48px",
+  },
 };
