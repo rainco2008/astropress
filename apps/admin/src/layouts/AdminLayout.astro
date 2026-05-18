@@ -399,8 +399,11 @@ const icons = adminIcons;
           <a href="/admin/users" class={currentPath.startsWith("/admin/users") ? "is-active" : ""}>
             <Fragment set:html={icons.users} /> Users
           </a>
-          <a href="/admin/themes" class={currentPath.startsWith("/admin/themes") ? "is-active" : ""}>
+          <a href="/admin/themes" class={currentPath.startsWith("/admin/themes") && !currentPath.startsWith("/admin/themes/loop-templates") ? "is-active" : ""}>
             <Fragment set:html={icons.themes} /> Themes
+          </a>
+          <a href="/admin/themes/loop-templates" class={currentPath.startsWith("/admin/themes/loop-templates") ? "is-active" : ""}>
+            <Fragment set:html={icons.media} /> Loop Templates
           </a>
           <a href="/admin/plugins" class={currentPath.startsWith("/admin/plugins") ? "is-active" : ""}>
             <Fragment set:html={icons.plugins} /> Plugins

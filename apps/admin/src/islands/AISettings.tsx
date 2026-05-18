@@ -70,7 +70,7 @@ export default function AISettings() {
 
   useEffect(() => {
     fetch("/api/ai/settings")
-      .then((r) => r.json())
+      .then((r) => r.json() as any)
       .then((data) => {
         const provider = data.activeProvider ?? "none";
         setActiveProvider(provider as ProviderId);
@@ -127,7 +127,7 @@ export default function AISettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (!res.ok) throw new Error(data.error);
       setStatus("saved");
       setEditingKey(false);
@@ -155,7 +155,7 @@ export default function AISettings() {
           context: {},
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (res.ok && data.reply) {
         setTestStatus("ok");
         setTestMessage("Connected successfully.");

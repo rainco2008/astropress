@@ -128,7 +128,7 @@ export default function FormEntries({ formId }: { formId: string }) {
     setLoading(true);
     const r = await fetch(`/api/forms/${formId}/entries?status=${status}&page=${page}`);
     if (r.ok) {
-      const data = await r.json();
+      const data = await r.json() as any;
       setEntries(data.entries ?? []);
       setTotal(data.total ?? 0);
     }

@@ -42,7 +42,7 @@ export const PUT: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
-  const body = await request.json();
+  const body = await request.json() as any;
   const { activeProvider, providers, systemContext } = body;
 
   // Load existing to preserve real API keys when masked value is sent

@@ -24,7 +24,7 @@ async function getRole(userId: number): Promise<string> {
 }
 
 const rawUsers = await db.select().from(wpUsers).orderBy(wpUsers.id);
-const users = await Promise.all(rawUsers.map(async (u) => ({ ...u, role: await getRole(u.id) })));
+const users = await Promise.all(rawUsers.map(async (u: any) => ({ ...u, role: await getRole(u.id) })));
 
 const roleLabel: Record<string, string> = {
   administrator: "Administrator",

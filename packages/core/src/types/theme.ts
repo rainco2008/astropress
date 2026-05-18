@@ -12,7 +12,15 @@ export type BlockType =
   | "divider"
   | "html"
   | "ai"
-  | "query-loop";
+  | "query-loop"
+  | "loop-image"
+  | "loop-title"
+  | "loop-excerpt"
+  | "loop-date"
+  | "loop-author"
+  | "loop-category"
+  | "loop-read-more"
+  | "loop-custom-field";
 
 export interface Block {
   id: string;
@@ -50,6 +58,9 @@ export interface Theme {
   id: string;
   name: string;
   description: string;
+  version?: string;
+  author?: string;
+  source?: "upload" | "marketplace";
   tokens: ThemeTokens;
   createdAt: string;
   updatedAt: string;
@@ -109,6 +120,14 @@ export interface ThemePackagePage {
   title: string;
   slug: string;
   blocks: Block[];
+}
+
+export interface LoopTemplate {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ThemePackage {
@@ -227,6 +246,14 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, unknown>> = {
   divider: { style: "solid", color: "#e2e8f0", thickness: 1 },
   html: { content: "<!-- Custom HTML here -->" },
   ai: { prompt: "" },
+  "loop-image": { height: 220, objectFit: "cover", borderRadius: "0", showPlaceholder: true },
+  "loop-title": { tag: "h3", size: "1.05rem", weight: "700", linked: true },
+  "loop-excerpt": { length: 120, size: "0.9rem" },
+  "loop-date": { format: "long", size: "11px" },
+  "loop-author": { prefix: "By ", size: "11px" },
+  "loop-category": { size: "10px", badge: false },
+  "loop-read-more": { text: "Read More →", buttonStyle: "link" },
+  "loop-custom-field": { fieldKey: "", label: "", showLabel: true, size: "13px", fallback: "" },
   "query-loop": {
     postType: "post",
     perPage: 6,
@@ -244,5 +271,9 @@ export const BLOCK_DEFAULTS: Record<BlockType, Record<string, unknown>> = {
     cardBorder: "#e2e8f0",
     cardRadius: "8px",
     padding: "5rem 48px",
+    loopTemplateId: "default-with-image",
+    pagination: "none",
+    pageLimit: 0,
+    loadMoreText: "Load More",
   },
 };

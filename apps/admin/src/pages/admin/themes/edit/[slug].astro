@@ -24,13 +24,14 @@ const TEMPLATE_SLUG_MAP: Record<string, string> = {
 
 // Any slug wrapped in __ is a template slug (legacy fixed or new dynamic __type_id__)
 const mightBeTemplate = slug.startsWith("__") && slug.endsWith("__");
+const isLoopItem = slug.startsWith("__loop-item_") && slug.endsWith("__");
 
 let isTemplate = false;
 let templatePart: any = undefined;
 let templateRecord: ThemeTemplate | undefined;
 let templateConditions: any[] = [];
 
-if (mightBeTemplate) {
+if (mightBeTemplate && !isLoopItem) {
   // Look up from the templates registry first
   const [tmplRow] = await db
     .select({ value: wpOptions.optionValue })
@@ -52,7 +53,15 @@ if (mightBeTemplate) {
 }
 
 let pageTitle = slug;
-if (!isTemplate) {
+if (isLoopItem) {
+  // Load loop template name
+  const [ltRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+    .where(eq(wpOptions.optionName, "astropress_loop_templates")).limit(1);
+  const ltList: any[] = ltRow?.value ? JSON.parse(ltRow.value) : [];
+  const ltId = slug.replace("__loop-item_", "").replace(/__$/, "");
+  const lt = ltList.find((t: any) => t.id === ltId);
+  pageTitle = lt ? lt.name : "Loop Template";
+} else if (!isTemplate) {
   const [page] = await db
     .select({ title: wpPosts.postTitle })
     .from(wpPosts)
@@ -97,7 +106,17 @@ const forms = rawForms.map((f: any) => ({
   fieldCount: (f.fields ?? []).filter((field: any) => !["page_break", "section_divider", "html"].includes(field.type)).length,
 }));
 
-const displayTitle = isTemplate
+// Load siteUrl for live preview
+const [siteUrlRow] = await db
+  .select({ value: wpOptions.optionValue })
+  .from(wpOptions)
+  .where(eq(wpOptions.optionName, "siteurl"))
+  .limit(1);
+const siteUrl = siteUrlRow?.value ?? "";
+
+const displayTitle = isLoopItem
+  ? pageTitle + " — Loop Template"
+  : isTemplate
   ? (TEMPLATE_TYPE_LABELS[templatePart as keyof typeof TEMPLATE_TYPE_LABELS] ?? templatePart) + " Template"
   : pageTitle;
 ---
@@ -123,9 +142,11 @@ const displayTitle = isTemplate
         initialTokens={tokens}
         forms={forms}
         isTemplate={isTemplate}
+        isLoopItem={isLoopItem}
         templatePart={templatePart}
         templateId={templateRecord?.id}
         initialConditions={templateConditions}
+        siteUrl={siteUrl}
       />
     </div>
   </body>

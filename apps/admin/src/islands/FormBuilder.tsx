@@ -166,7 +166,7 @@ function createField(type: string): FormField {
     ...(type === "address" ? { addressScheme: "international" } : {}),
     ...(type === "date_time" ? { dateEnable: true, timeEnable: false, dateType: "datepicker", dateFormat: "MM/DD/YYYY", timeFormat: "12H" } : {}),
     ...(type === "payment_single" ? { itemName: "", itemPrice: "" } : {}),
-    ...(type === "range_slider" ? { min: 0, max: 100, step: 1, defaultValue: 50, handles: "single" } : {}),
+    ...(type === "range_slider" ? { min: 0, max: 100, step: 1, defaultValue: "50", handles: "single" } : {}),
     ...(type === "nps" ? { npsStart: "Not at all likely", npsEnd: "Extremely likely" } : {}),
     ...(type === "captcha" ? { captchaType: "hcaptcha", siteKey: "", secretKey: "" } : {}),
     ...(type === "signature" ? { penColor: "#000000", penSize: "medium" } : {}),
@@ -1211,8 +1211,8 @@ export default function FormBuilder({ formId }: { formId?: string }) {
 
   useEffect(() => {
     if (formId) {
-      fetch(`/api/forms/${formId}`).then(r => r.ok ? r.json() : null).then(d => {
-        if (d) { setForm(d); } else { const f = defaultForm(); f.id = formId; setForm(f); }
+      fetch(`/api/forms/${formId}`).then(r => r.ok ? r.json() as any : null).then((d: any) => {
+        if (d) { setForm(d as any); } else { const f = defaultForm(); f.id = formId; setForm(f); }
       }).catch(() => { const f = defaultForm(); f.id = formId; setForm(f); });
     } else {
       setForm(defaultForm());
@@ -1226,7 +1226,7 @@ export default function FormBuilder({ formId }: { formId?: string }) {
       const res = await fetch("/api/forms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (res.ok) {
         setStatus("Saved ✓");
-        if (!formId) { const d = await res.json(); window.location.href = `/admin/forms/${d.form?.id ?? form.id}`; }
+        if (!formId) { const d = await res.json() as any; window.location.href = `/admin/forms/${d.form?.id ?? form.id}`; }
         setTimeout(() => setStatus(""), 3000);
       } else { setStatus("Error saving"); }
     } catch { setStatus("Error saving"); }

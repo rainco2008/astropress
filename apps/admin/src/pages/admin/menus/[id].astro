@@ -42,11 +42,11 @@ if (rawItems.length > 0) {
     .from(wpPostmeta)
     .where(eq(wpPostmeta.metaKey, "_menu_item_url"));
   for (const m of metas) {
-    if (rawItems.some(i => i.id === m.postId)) urlMap[m.postId] = m.metaValue ?? "";
+    if (rawItems.some((i: any) => i.id === m.postId)) urlMap[m.postId] = m.metaValue ?? "";
   }
 }
 
-const menuItems = rawItems.map(i => ({ ...i, url: urlMap[i.id] ?? "" }));
+const menuItems = rawItems.map((i: any) => ({ ...i, url: urlMap[i.id] ?? "" }));
 
 // Quick-add: pages and posts
 const quickPages = await db
@@ -114,7 +114,7 @@ const itemsJson = JSON.stringify(menuItems);
       <div id="items-list" style="min-height:80px">
         {menuItems.length === 0
           ? <div class="empty-state" id="empty-msg">Add menu items from the panel on the right →</div>
-          : menuItems.map(item => (
+          : menuItems.map((item: any) => (
             <div class="menu-item" draggable="true" data-id={item.id} data-parent={item.parent} data-order={item.order}>
               <span class="item-handle">⠿</span>
               <div class="item-depth">
@@ -160,7 +160,7 @@ const itemsJson = JSON.stringify(menuItems);
           </div>
           <div class="panel-body" id="panel-pages">
             <div style="max-height:200px;overflow-y:auto;margin-bottom:10px">
-              {quickPages.map(p => (
+              {quickPages.map((p: any) => (
                 <label class="quick-item">
                   <input type="checkbox" class="page-chk" value={p.id} data-title={p.title} data-url={`/${p.slug}`} />
                   {p.title}
@@ -180,7 +180,7 @@ const itemsJson = JSON.stringify(menuItems);
           </div>
           <div class="panel-body" id="panel-posts">
             <div style="max-height:200px;overflow-y:auto;margin-bottom:10px">
-              {quickPosts.map(p => (
+              {quickPosts.map((p: any) => (
                 <label class="quick-item">
                   <input type="checkbox" class="post-chk" value={p.id} data-title={p.title} data-url={`/blog/${p.slug}`} />
                   {p.title}

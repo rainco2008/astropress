@@ -22,6 +22,8 @@ interface FieldGroup {
   fields: ACFField[];
   position: string;
   labelPlacement: string;
+  active?: boolean;
+  location?: any[][];
 }
 
 interface Props {

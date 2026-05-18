@@ -32,9 +32,9 @@ export default function TaxonomyPanel({ postId, taxonomy, label, hierarchical }:
     Promise.all([
       fetch(`/api/terms/${taxonomy}`).then((r) => r.json()),
       fetch(`/api/posts/${postId}/terms/${taxonomy}`).then((r) => r.json()),
-    ]).then(([terms, assignedIds]: [Term[], number[]]) => {
-      setAllTerms(terms);
-      setSelected(new Set(assignedIds));
+    ]).then(([terms, assignedIds]) => {
+      setAllTerms(terms as Term[]);
+      setSelected(new Set(assignedIds as number[]));
     }).catch(() => {});
   }, [postId, taxonomy]);
 

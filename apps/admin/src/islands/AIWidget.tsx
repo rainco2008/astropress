@@ -286,7 +286,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
         body: JSON.stringify({ messages: newMessages, context: buildContext() }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as any;
       if (!res.ok || data.error) throw new Error(data.error ?? "Request failed");
 
       // ── Parse action blocks from reply ────────────────────────────────
@@ -313,7 +313,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action }),
           });
-          const d = await r.json();
+          const d = await r.json() as any;
           const result = d.results?.[0] ?? { success: false, message: "No result" };
           const chip: ActionChip = { label: result.message, ok: result.success };
           chips.push(chip);
@@ -608,7 +608,7 @@ function ProviderBadge() {
 
   useEffect(() => {
     fetch("/api/ai/settings")
-      .then((r) => r.json())
+      .then((r) => r.json() as any)
       .then((d) => { if (d.activeProvider && d.activeProvider !== "none") setProvider(d.activeProvider); })
       .catch(() => {});
   }, []);

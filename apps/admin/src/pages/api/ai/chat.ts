@@ -19,7 +19,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   let context: Record<string, any>;
 
   try {
-    ({ messages, context } = await request.json());
+    ({ messages, context } = await request.json() as any);
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,

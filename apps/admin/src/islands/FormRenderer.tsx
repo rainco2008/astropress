@@ -352,7 +352,7 @@ export default function FormRenderer({ formId, pageUrl }: { formId: string; page
   useEffect(() => {
     fetch(`/api/forms/${formId}`)
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => {
+      .then((data: any) => {
         setForm(data);
         // Pre-fill defaults
         const defaults: Record<string, any> = {};
@@ -429,7 +429,7 @@ export default function FormRenderer({ formId, pageUrl }: { formId: string; page
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await r.json();
+      const data = await r.json() as any;
       if (!r.ok) {
         setErrors({ _form: data.error ?? "Submission failed." });
         setSubmitting(false);

@@ -2,6 +2,8 @@
 import type { Block, ThemeTokens } from "@astropress/core/types/theme";
 import { buildFormHtml } from "../lib/formRenderer";
 import { queryPosts } from "@astropress/core/query";
+import { eq, inArray, and } from "drizzle-orm";
+import { wpOptions, wpPostmeta } from "@astropress/core/schema";
 
 interface Props {
   blocks: Block[];
@@ -18,22 +20,206 @@ const { blocks, tokens, formsById = {}, navItems = [], siteTitle = "", siteTagli
 // Pre-fetch posts for any query-loop blocks
 const db = Astro.locals.db;
 const queryLoopData: Record<string, any[]> = {};
+const queryLoopTotal: Record<string, number> = {};
+const currentPaged = Number(Astro.url.searchParams.get("paged") || "1");
+
 for (const block of blocks) {
   if (block.type === "query-loop" && db) {
     try {
-      const { posts } = await queryPosts(db, {
+      const perPage = Number(block.props.perPage) || 6;
+      const { posts, total } = await queryPosts(db, {
         type: String(block.props.postType || "post"),
-        perPage: Number(block.props.perPage) || 6,
+        perPage,
+        page: currentPaged,
         orderBy: (block.props.orderBy as any) || "date",
-        order: (String(block.props.order || "DESC") as "DESC" | "ASC"),
+        order: (String(block.props.order || "desc").toLowerCase() as "asc" | "desc"),
       });
       queryLoopData[block.id] = posts;
-    } catch { queryLoopData[block.id] = []; }
+      queryLoopTotal[block.id] = total;
+      // Store current page and total in block props for pagination rendering
+      block.props = { ...block.props, _currentPage: currentPaged, _totalPosts: total };
+    } catch { queryLoopData[block.id] = []; queryLoopTotal[block.id] = 0; }
+  }
+}
+
+// Pre-fetch loop template schemas for query-loop blocks
+const loopTemplateCache: Record<string, any[]> = {};
+if (db) {
+  for (const block of blocks) {
+    if (block.type === "query-loop") {
+      const templateId = String(block.props.loopTemplateId || "default-with-image");
+      if (!loopTemplateCache[templateId] && !templateId.startsWith("default-")) {
+        const schemaKey = `astropress_page_schema___loop-item_${templateId}__`;
+        try {
+          const [srow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+            .where(eq(wpOptions.optionName, schemaKey)).limit(1);
+          if (srow?.value) {
+            const s = JSON.parse(srow.value);
+            loopTemplateCache[templateId] = s.blocks ?? [];
+          }
+        } catch {}
+      }
+    }
+  }
+}
+
+// Pre-fetch custom field meta for loop-custom-field blocks
+// Map: postId → { fieldKey → value }
+const postMetaCache: Record<number, Record<string, string>> = {};
+if (db) {
+  for (const block of blocks) {
+    if (block.type !== "query-loop") continue;
+    const templateId = String(block.props.loopTemplateId || "default-with-image");
+    const templateBlocks: any[] = templateId.startsWith("default-")
+      ? [] // defaults don't have custom-field blocks
+      : (loopTemplateCache[templateId] ?? []);
+    const fieldKeys = templateBlocks
+      .filter((b: any) => b.type === "loop-custom-field" && b.props?.fieldKey)
+      .map((b: any) => String(b.props.fieldKey));
+    if (fieldKeys.length === 0) continue;
+
+    const posts = queryLoopData[block.id] ?? [];
+    const postIds = posts.map((p: any) => p.id).filter(Boolean);
+    if (postIds.length === 0) continue;
+
+    try {
+      const metaRows = await db.select({
+        postId: wpPostmeta.postId,
+        metaKey: wpPostmeta.metaKey,
+        metaValue: wpPostmeta.metaValue,
+      }).from(wpPostmeta).where(
+        and(inArray(wpPostmeta.postId, postIds), inArray(wpPostmeta.metaKey, fieldKeys))
+      );
+      for (const row of metaRows) {
+        if (!postMetaCache[row.postId]) postMetaCache[row.postId] = {};
+        postMetaCache[row.postId][row.metaKey] = row.metaValue ?? "";
+      }
+    } catch {}
   }
 }
 
 function esc(s: unknown) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+const DEFAULT_LOOP_TEMPLATE_BLOCKS: Record<string, any[]> = {
+  "default-with-image": [
+    { type: "loop-image", props: { height: 220 } },
+    { type: "loop-category", props: { size: "10px" } },
+    { type: "loop-title", props: { tag: "h3", size: "1.05rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-excerpt", props: { length: 120, size: "0.9rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-no-image": [
+    { type: "loop-category", props: { size: "10px", badge: true } },
+    { type: "loop-title", props: { tag: "h3", size: "1.1rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-author", props: { prefix: "By ", size: "12px" } },
+    { type: "loop-excerpt", props: { length: 160, size: "0.9rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-horizontal": [
+    { type: "loop-image", props: { height: 140, layout: "horizontal", width: "180px" } },
+    { type: "loop-category", props: { size: "10px" } },
+    { type: "loop-title", props: { tag: "h3", size: "1rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-excerpt", props: { length: 80, size: "0.88rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-magazine": [
+    { type: "loop-image", props: { height: 280 } },
+    { type: "loop-category", props: { size: "10px", badge: true } },
+    { type: "loop-title", props: { tag: "h3", size: "1.15rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+};
+
+function renderLoopTemplate(loopBlocks: any[], post: any, toks: ThemeTokens, meta: Record<string, string> = {}): string {
+  const postUrl = post.type === "page" ? `/${post.slug}` : `/blog/${post.slug}`;
+  const date = post.date ? new Date(post.date) : new Date();
+
+  return loopBlocks.map((block: any) => {
+    const p = block.props ?? {};
+    switch (block.type) {
+      case "loop-image": {
+        const imgH = Number(p.height) || 220;
+        const br = String(p.borderRadius || "0");
+        return `<a href="${esc(postUrl)}" style="display:block;height:${imgH}px;overflow:hidden;border-radius:${br} ${br} 0 0;background:linear-gradient(135deg,${toks.colors.surface},${toks.colors.border});flex-shrink:0;">
+          <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${toks.colors.border}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
+        </a>`;
+      }
+      case "loop-category": {
+        const catColor = String(p.color || toks.colors.primary);
+        const badge = p.badge;
+        return `<div style="padding:0 16px 6px;">
+          <span style="font-size:${String(p.size || "10px")};font-weight:700;color:${catColor};text-transform:uppercase;letter-spacing:0.5px;${badge ? `background:${toks.colors.surface};border:1px solid ${toks.colors.border};border-radius:99px;padding:2px 8px;` : ""}">${esc(post.type || "Post")}</span>
+        </div>`;
+      }
+      case "loop-title": {
+        const tag = String(p.tag || "h3");
+        const titleColor = String(p.color || toks.colors.text);
+        return `<${tag} style="margin:0;padding:6px 16px;font-family:${toks.fonts.heading};font-weight:${String(p.weight || "700")};font-size:${String(p.size || "1.05rem")};line-height:1.35;color:${titleColor};">
+          <a href="${esc(postUrl)}" style="color:inherit;text-decoration:none;">${esc(post.title)}</a>
+        </${tag}>`;
+      }
+      case "loop-date": {
+        const fmt = String(p.format || "long");
+        let dateStr = "";
+        try {
+          if (fmt === "long") dateStr = date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+          else if (fmt === "short") dateStr = date.toLocaleDateString("en-US");
+          else if (fmt === "iso") dateStr = date.toISOString().slice(0, 10);
+          else if (fmt === "relative") {
+            const diff = Date.now() - date.getTime();
+            const days = Math.floor(diff / 86400000);
+            dateStr = days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`;
+          }
+        } catch { dateStr = String(post.date || ""); }
+        return `<div style="padding:4px 16px;"><span style="font-size:${String(p.size || "11px")};color:${String(p.color || toks.colors.textMuted)};">${esc(dateStr)}</span></div>`;
+      }
+      case "loop-author":
+        return `<div style="padding:4px 16px;"><span style="font-size:${String(p.size || "11px")};color:${String(p.color || toks.colors.textMuted)};">${esc(String(p.prefix || "By "))}Author</span></div>`;
+      case "loop-excerpt": {
+        const rawExcerpt = post.excerpt || (post.content ? String(post.content).replace(/<[^>]+>/g, "") : "");
+        const length = Number(p.length) || 120;
+        const excerpt = rawExcerpt.length > length ? rawExcerpt.slice(0, length) + "\u2026" : rawExcerpt;
+        return excerpt ? `<div style="padding:4px 16px;"><p style="margin:0;font-size:${String(p.size || "0.9rem")};color:${String(p.color || toks.colors.textMuted)};line-height:1.65;">${esc(excerpt)}</p></div>` : "";
+      }
+      case "loop-read-more": {
+        const btnStyle = String(p.buttonStyle || "link");
+        const btnColor = String(p.color || toks.colors.primary);
+        const btnText = String(p.text || "Read More \u2192");
+        if (btnStyle === "button") {
+          return `<div style="padding:10px 16px 16px;"><a href="${esc(postUrl)}" style="display:inline-block;background:${btnColor};color:#fff;padding:8px 20px;border-radius:${toks.spacing.borderRadius};font-size:${String(p.size || "13px")};font-weight:600;text-decoration:none;">${esc(btnText)}</a></div>`;
+        } else if (btnStyle === "outline") {
+          return `<div style="padding:10px 16px 16px;"><a href="${esc(postUrl)}" style="display:inline-block;border:2px solid ${btnColor};color:${btnColor};padding:7px 18px;border-radius:${toks.spacing.borderRadius};font-size:${String(p.size || "13px")};font-weight:600;text-decoration:none;">${esc(btnText)}</a></div>`;
+        }
+        return `<div style="padding:10px 16px 16px;"><a href="${esc(postUrl)}" style="font-size:${String(p.size || "13px")};font-weight:600;color:${btnColor};text-decoration:none;">${esc(btnText)}</a></div>`;
+      }
+      case "loop-custom-field": {
+        const fieldKey = String(p.fieldKey || "");
+        if (!fieldKey) return "";
+        const val = meta[fieldKey] ?? String(p.fallback || "");
+        if (!val) return "";
+        const labelHtml = p.showLabel !== false && p.label
+          ? `<span style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${String(p.labelColor || toks.colors.textMuted)};margin-bottom:2px;">${esc(String(p.label))}</span>`
+          : "";
+        return `<div style="padding:4px 16px;">${labelHtml}<span style="font-size:${String(p.size || "13px")};color:${String(p.color || toks.colors.text)};">${esc(val)}</span></div>`;
+      }
+      case "spacer":
+        return `<div style="height:${Number(p.height) || 16}px;"></div>`;
+      case "divider":
+        return `<hr style="border:none;border-top:1px solid ${toks.colors.border};margin:8px 16px;">`;
+      case "html":
+        return `<div style="padding:0 16px;">${String(p.content || "")}</div>`;
+      default:
+        return "";
+    }
+  }).join("");
 }
 
 function renderBlock(block: Block, queryData?: any[]): string {
@@ -152,46 +338,97 @@ function renderBlock(block: Block, queryData?: any[]): string {
       const cardBg = String(p.cardBg || "#ffffff");
       const cardBorder = String(p.cardBorder || "#e2e8f0");
       const cardRadius = String(p.cardRadius || "8px");
-      const imgH = Number(p.imageHeight) || 200;
       const padding = String(p.padding || tokens.spacing.sectionY + " 48px");
       const cssClass = p._cssClass ? ` ${esc(p._cssClass)}` : "";
       const el = String(p._element || "section");
+      const templateId = String(p.loopTemplateId || "default-with-image");
+      const paginationType = String(p.pagination || "none");
+      const currentPage = Number(p._currentPage) || 1;
+      const perPage = Number(p.perPage) || 6;
+      const pageLimit = Number(p.pageLimit) || 0;
+      const totalPosts = Number(p._totalPosts) || posts.length;
+
+      // Get loop template blocks
+      let templateBlocks: any[] = loopTemplateCache[templateId] ?? DEFAULT_LOOP_TEMPLATE_BLOCKS[templateId] ?? DEFAULT_LOOP_TEMPLATE_BLOCKS["default-with-image"];
 
       if (posts.length === 0) {
         return `<${el} class="ap-block ap-block-query-loop${cssClass}" style="padding:${padding};text-align:center;color:${tokens.colors.textMuted};font-size:14px;">No posts found.</${el}>`;
       }
 
-      const cardsHtml = posts.map((post: any) => {
-        const postUrl = `/${post.postName || post.postType || "blog"}/${post.postName ?? post.id}`;
-        const titleUrl = post.postType === "page" ? `/${post.postName}` : `/blog/${post.postName}`;
-        const date = post.postDate ? new Date(post.postDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
-        const excerpt = post.postExcerpt || (post.postContent ? String(post.postContent).replace(/<[^>]+>/g, "").slice(0, 140) + "…" : "");
+      const isHorizontal = templateBlocks.some((b: any) => b.type === "loop-image" && b.props?.layout === "horizontal");
+      const cardStyle = isHorizontal
+        ? `background:${cardBg};border:1px solid ${cardBorder};border-radius:${cardRadius};overflow:hidden;display:flex;flex-direction:row;`
+        : `background:${cardBg};border:1px solid ${cardBorder};border-radius:${cardRadius};overflow:hidden;display:flex;flex-direction:column;`;
 
-        return `
-<article style="background:${cardBg};border:1px solid ${cardBorder};border-radius:${cardRadius};overflow:hidden;display:flex;flex-direction:column;">
-  ${p.showImage !== false ? `<a href="${esc(titleUrl)}" style="display:block;height:${imgH}px;background:${tokens.colors.surface};overflow:hidden;flex-shrink:0;">
-    <div style="width:100%;height:100%;background:linear-gradient(135deg,${tokens.colors.surface},${tokens.colors.border});display:flex;align-items:center;justify-content:center;">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${tokens.colors.border}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-    </div>
-  </a>` : ""}
-  <div style="padding:20px;flex:1;display:flex;flex-direction:column;">
-    ${p.showCategory !== false ? `<div style="font-size:10px;font-weight:700;color:${tokens.colors.primary};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${esc(post.postType || "Post")}</div>` : ""}
-    <h3 style="font-family:${tokens.fonts.heading};font-weight:700;font-size:1.05rem;margin:0 0 8px;line-height:1.4;">
-      <a href="${esc(titleUrl)}" style="color:${tokens.colors.text};text-decoration:none;">${esc(post.postTitle)}</a>
-    </h3>
-    ${p.showDate !== false && date ? `<div style="font-size:11px;color:${tokens.colors.textMuted};margin-bottom:10px;">${date}</div>` : ""}
-    ${p.showExcerpt !== false && excerpt ? `<p style="font-size:0.9rem;color:${tokens.colors.textMuted};line-height:1.65;margin:0 0 16px;flex:1;">${esc(excerpt)}</p>` : ""}
-    ${p.showAuthor !== false ? `<div style="font-size:11px;color:${tokens.colors.textMuted};margin-top:auto;">By Author</div>` : ""}
-    <a href="${esc(titleUrl)}" style="margin-top:12px;display:inline-block;font-size:13px;font-weight:600;color:${tokens.colors.primary};text-decoration:none;">Read more →</a>
-  </div>
-</article>`;
+      // Map posts to the query.ts Post shape → simple slug/type/title/content/excerpt/date
+      const cardsHtml = posts.map((post: any) => {
+        // query.ts returns: { id, title, slug, content, excerpt, status, type, date, ... }
+        const postId = post.id ?? post.ID ?? 0;
+        const mapped = {
+          id: postId,
+          title: post.title ?? post.postTitle ?? "",
+          slug: post.slug ?? post.postName ?? "",
+          type: post.type ?? post.postType ?? "post",
+          excerpt: post.excerpt ?? post.postExcerpt ?? "",
+          content: post.content ?? post.postContent ?? "",
+          date: post.date ?? post.postDate ?? "",
+        };
+        const meta = postMetaCache[postId] ?? {};
+        if (isHorizontal) {
+          const imgBlocks = templateBlocks.filter((b: any) => b.type === "loop-image");
+          const restBlocks = templateBlocks.filter((b: any) => b.type !== "loop-image");
+          const imgWidth = String(imgBlocks[0]?.props?.width || "180px");
+          return `<article style="${cardStyle}">
+            <div style="width:${imgWidth};flex-shrink:0;">${renderLoopTemplate(imgBlocks, mapped, tokens, meta)}</div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 0;">${renderLoopTemplate(restBlocks, mapped, tokens, meta)}</div>
+          </article>`;
+        }
+        return `<article style="${cardStyle}">${renderLoopTemplate(templateBlocks, mapped, tokens, meta)}</article>`;
       }).join("");
+
+      // Pagination
+      let paginationHtml = "";
+      if (paginationType !== "none") {
+        const totalPages = Math.ceil(totalPosts / perPage);
+        const effectiveTotalPages = pageLimit > 0 ? Math.min(totalPages, pageLimit) : totalPages;
+
+        if (paginationType === "numbers" && effectiveTotalPages > 1) {
+          const pageLinks = Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).map(n => {
+            const url = new URL(Astro.url.href);
+            url.searchParams.set("paged", String(n));
+            return `<a href="${esc(url.toString())}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:4px;font-size:14px;font-weight:${n === currentPage ? "700" : "400"};background:${n === currentPage ? tokens.colors.primary : "transparent"};color:${n === currentPage ? "#fff" : tokens.colors.text};border:1px solid ${n === currentPage ? tokens.colors.primary : tokens.colors.border};text-decoration:none;">${n}</a>`;
+          }).join("");
+          paginationHtml = `<div style="display:flex;justify-content:center;gap:6px;margin-top:40px;flex-wrap:wrap;">${pageLinks}</div>`;
+        } else if (paginationType === "prev-next" && effectiveTotalPages > 1) {
+          const prevHref = currentPage > 1 ? (() => { const u = new URL(Astro.url.href); u.searchParams.set("paged", String(currentPage - 1)); return u.toString(); })() : null;
+          const nextHref = currentPage < effectiveTotalPages ? (() => { const u = new URL(Astro.url.href); u.searchParams.set("paged", String(currentPage + 1)); return u.toString(); })() : null;
+          paginationHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:40px;">
+            ${prevHref ? `<a href="${esc(prevHref)}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border:1px solid ${tokens.colors.border};border-radius:${tokens.spacing.borderRadius};color:${tokens.colors.text};text-decoration:none;font-size:14px;">\u2190 Previous</a>` : `<span></span>`}
+            <span style="font-size:13px;color:${tokens.colors.textMuted};">Page ${currentPage} of ${effectiveTotalPages}</span>
+            ${nextHref ? `<a href="${esc(nextHref)}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border:1px solid ${tokens.colors.border};border-radius:${tokens.spacing.borderRadius};color:${tokens.colors.text};text-decoration:none;font-size:14px;">Next \u2192</a>` : `<span></span>`}
+          </div>`;
+        } else if (paginationType === "load-more") {
+          const blockId = block.id;
+          const loadMoreText = String(p.loadMoreText || "Load More");
+          paginationHtml = `
+<div style="text-align:center;margin-top:40px;" id="load-more-${blockId}">
+  <button onclick="apLoadMore('${blockId}',${currentPage},${perPage},'${String(p.postType || "post")}','${String(p.orderBy || "date")}','${String(p.order || "DESC")}','${templateId}','${cardBg}','${cardBorder}','${cardRadius}',${cols},'${gap}')" style="padding:12px 32px;background:${tokens.colors.primary};color:#fff;border:none;border-radius:${tokens.spacing.borderRadius};font-size:14px;font-weight:600;cursor:pointer;">${esc(loadMoreText)}</button>
+  <div id="load-more-spinner-${blockId}" style="display:none;margin-top:12px;color:${tokens.colors.textMuted};font-size:13px;">Loading\u2026</div>
+</div>`;
+        } else if (paginationType === "infinite-scroll") {
+          const blockId = block.id;
+          paginationHtml = `
+<div id="infinite-sentinel-${blockId}" data-page="${currentPage}" data-per-page="${perPage}" data-post-type="${String(p.postType || "post")}" data-orderby="${String(p.orderBy || "date")}" data-order="${String(p.order || "DESC")}" data-template-id="${templateId}" data-cardbg="${cardBg}" data-cardborder="${cardBorder}" data-cardradius="${cardRadius}" data-cols="${cols}" data-gap="${gap}" style="height:20px;margin-top:20px;"></div>
+<div id="infinite-loading-${blockId}" style="text-align:center;padding:20px;display:none;color:${tokens.colors.textMuted};font-size:13px;">Loading more posts\u2026</div>`;
+        }
+      }
 
       return `<${el} class="ap-block ap-block-query-loop${cssClass}" style="padding:${padding};">
   <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;">
-    <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:${gap};">
+    <div id="query-loop-grid-${block.id}" style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:${gap};">
       ${cardsHtml}
     </div>
+    ${paginationHtml}
   </div>
 </${el}>`;
     }
@@ -225,4 +462,67 @@ const html = blocks.map(block => wrapBlock(block, renderBlock(block, queryLoopDa
   [data-ap-animation="ap-slide-right"] { animation: ap-slide-right 0.6s ease both }
   [data-ap-animation="ap-zoom-in"]  { animation: ap-zoom-in  0.6s ease both }
 </style>
+<script is:inline>
+// Load More
+async function apLoadMore(blockId, currentPage, perPage, postType, orderBy, order, templateId, cardBg, cardBorder, cardRadius, cols, gap) {
+  var nextPage = currentPage + 1;
+  var spinner = document.getElementById('load-more-spinner-' + blockId);
+  var btn = document.querySelector('#load-more-' + blockId + ' button');
+  if (spinner) spinner.style.display = 'block';
+  if (btn) btn.disabled = true;
+  try {
+    var res = await fetch('/api/query-loop?postType=' + postType + '&page=' + nextPage + '&perPage=' + perPage + '&orderBy=' + orderBy + '&order=' + order + '&templateId=' + encodeURIComponent(templateId) + '&cardBg=' + encodeURIComponent(cardBg) + '&cardBorder=' + encodeURIComponent(cardBorder) + '&cardRadius=' + encodeURIComponent(cardRadius));
+    if (!res.ok) throw new Error('Failed');
+    var data = await res.json();
+    if (data.html) {
+      var grid = document.getElementById('query-loop-grid-' + blockId);
+      if (grid) grid.insertAdjacentHTML('beforeend', data.html);
+    }
+    if (data.hasMore) {
+      if (btn) {
+        btn.disabled = false;
+        btn.onclick = function() { apLoadMore(blockId, nextPage, perPage, postType, orderBy, order, templateId, cardBg, cardBorder, cardRadius, cols, gap); };
+      }
+    } else {
+      var container = document.getElementById('load-more-' + blockId);
+      if (container) container.style.display = 'none';
+    }
+  } catch(e) {
+    if (btn) btn.disabled = false;
+  }
+  if (spinner) spinner.style.display = 'none';
+}
+
+// Infinite Scroll
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[id^="infinite-sentinel-"]').forEach(function(sentinel) {
+    var blockId = sentinel.id.replace('infinite-sentinel-', '');
+    var loading = false;
+    var done = false;
+    var currentPage = parseInt(sentinel.dataset.page) || 1;
+    var perPage = parseInt(sentinel.dataset.perPage) || 6;
+    var observer = new IntersectionObserver(async function(entries) {
+      if (!entries[0].isIntersecting || loading || done) return;
+      loading = true;
+      var loadingEl = document.getElementById('infinite-loading-' + blockId);
+      if (loadingEl) loadingEl.style.display = 'block';
+      var nextPage = currentPage + 1;
+      try {
+        var res = await fetch('/api/query-loop?postType=' + (sentinel.dataset.postType||'post') + '&page=' + nextPage + '&perPage=' + perPage + '&orderBy=' + (sentinel.dataset.orderby||'date') + '&order=' + (sentinel.dataset.order||'DESC') + '&templateId=' + encodeURIComponent(sentinel.dataset.templateId||'default-with-image'));
+        var data = await res.json();
+        if (data.html) {
+          var grid = document.getElementById('query-loop-grid-' + blockId);
+          if (grid) grid.insertAdjacentHTML('beforeend', data.html);
+          currentPage = nextPage;
+          sentinel.dataset.page = String(currentPage);
+        }
+        if (!data.hasMore) { done = true; observer.disconnect(); }
+      } catch(e) {}
+      if (loadingEl) loadingEl.style.display = 'none';
+      loading = false;
+    }, { rootMargin: '200px' });
+    observer.observe(sentinel);
+  });
+});
+</script>
 <div class="ap-blocks" set:html={html} />

@@ -36,7 +36,7 @@ const saved = Astro.url.searchParams.get("saved") === "1";
 const rows = await db
   .select({ name: wpOptions.optionName, value: wpOptions.optionValue })
   .from(wpOptions);
-const opts = Object.fromEntries(rows.map((r) => [r.name, r.value]));
+const opts = Object.fromEntries(rows.map((r: any) => [r.name, r.value]));
 ---
 <AdminLayout title="Settings › General">
   <div class="settings-wrap">

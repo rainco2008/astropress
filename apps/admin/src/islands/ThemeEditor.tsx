@@ -13,6 +13,7 @@ interface Props {
   initialTokens: ThemeTokens;
   forms?: FormOption[];
   isTemplate?: boolean;
+  isLoopItem?: boolean;
   templatePart?: TemplateType;
   templateId?: string;
   initialConditions?: DisplayCondition[];
@@ -67,6 +68,20 @@ const TEMPLATE_PALETTE = [
   { type: "html" as BlockType, label: "HTML", desc: "Custom HTML" },
   { type: "spacer" as BlockType, label: "Spacer", desc: "Vertical space" },
   { type: "divider" as BlockType, label: "Divider", desc: "Horizontal rule" },
+];
+
+const LOOP_PALETTE = [
+  { type: "loop-image" as BlockType, label: "Post Image", desc: "Featured image of the post" },
+  { type: "loop-title" as BlockType, label: "Post Title", desc: "Title with link to post" },
+  { type: "loop-excerpt" as BlockType, label: "Post Excerpt", desc: "Auto-generated excerpt" },
+  { type: "loop-date" as BlockType, label: "Post Date", desc: "Publication date" },
+  { type: "loop-author" as BlockType, label: "Post Author", desc: "Author name" },
+  { type: "loop-category" as BlockType, label: "Post Category", desc: "Category / taxonomy badges" },
+  { type: "loop-read-more" as BlockType, label: "Read More", desc: "Link or button to post" },
+  { type: "loop-custom-field" as BlockType, label: "Custom Field", desc: "Display a post meta / custom field value" },
+  { type: "spacer" as BlockType, label: "Spacer", desc: "Vertical whitespace" },
+  { type: "divider" as BlockType, label: "Divider", desc: "Horizontal rule" },
+  { type: "html" as BlockType, label: "HTML", desc: "Custom HTML" },
 ];
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -146,6 +161,171 @@ function AIBlockPreview({ block, tokens, isSelected, onPropChange, onReplace }: 
           {generating ? <><span style={{ display: "inline-block", width: "12px", height: "12px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />Generating…</> : <>✨ Generate Block</>}
         </button>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
+  );
+}
+
+// ─── Query Loop Live Preview ──────────────────────────────────────────────────
+const DEFAULT_PREVIEW_TEMPLATES: Record<string, any[]> = {
+  "default-with-image": [
+    { type: "loop-image", props: { height: 220 } },
+    { type: "loop-category", props: { size: "10px" } },
+    { type: "loop-title", props: { tag: "h3", size: "1.05rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-excerpt", props: { length: 120, size: "0.9rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-no-image": [
+    { type: "loop-category", props: { size: "10px", badge: true } },
+    { type: "loop-title", props: { tag: "h3", size: "1.1rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-author", props: { prefix: "By " } },
+    { type: "loop-excerpt", props: { length: 160, size: "0.9rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-horizontal": [
+    { type: "loop-image", props: { height: 140, layout: "horizontal", width: "180px" } },
+    { type: "loop-category", props: { size: "10px" } },
+    { type: "loop-title", props: { tag: "h3", size: "1rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-excerpt", props: { length: 80, size: "0.88rem" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+  "default-magazine": [
+    { type: "loop-image", props: { height: 280 } },
+    { type: "loop-category", props: { size: "10px", badge: true } },
+    { type: "loop-title", props: { tag: "h3", size: "1.15rem", weight: "700" } },
+    { type: "loop-date", props: { size: "11px" } },
+    { type: "loop-read-more", props: { text: "Read More →", buttonStyle: "link" } },
+  ],
+};
+
+function LoopBlockNode({ b, post, toks }: { b: any; post: any; toks: ThemeTokens }) {
+  const p = b.props ?? {};
+  const date = post.date ? new Date(post.date) : new Date();
+  let dateStr = "";
+  try {
+    const fmt = String(p.format || "long");
+    if (fmt === "long") dateStr = date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    else if (fmt === "short") dateStr = date.toLocaleDateString("en-US");
+    else if (fmt === "iso") dateStr = date.toISOString().slice(0, 10);
+    else if (fmt === "relative") { const d = Math.floor((Date.now() - date.getTime()) / 86400000); dateStr = d === 0 ? "Today" : d === 1 ? "Yesterday" : `${d} days ago`; }
+  } catch { dateStr = post.date ?? ""; }
+
+  switch (b.type) {
+    case "loop-image":
+      return <div style={{ height: `${Number(p.height) || 220}px`, background: `linear-gradient(135deg, ${toks.colors.surface}, ${toks.colors.border})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", borderRadius: `${String(p.borderRadius || "0")} ${String(p.borderRadius || "0")} 0 0` }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={toks.colors.border} strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </div>;
+    case "loop-category":
+      return <div style={{ padding: "0 16px 6px" }}>
+        <span style={{ fontSize: String(p.size || "10px"), fontWeight: 700, color: String(p.color || toks.colors.primary), textTransform: "uppercase" as const, letterSpacing: "0.5px", ...(p.badge ? { background: toks.colors.surface, border: `1px solid ${toks.colors.border}`, borderRadius: "99px", padding: "2px 8px" } : {}) }}>{post.type || "Post"}</span>
+      </div>;
+    case "loop-title": {
+      const Tag = (String(p.tag || "h3")) as any;
+      return <Tag style={{ margin: 0, padding: "6px 16px", fontFamily: toks.fonts.heading, fontWeight: Number(String(p.weight || "700")), fontSize: String(p.size || "1.05rem"), lineHeight: 1.35, color: String(p.color || toks.colors.text) }}>{post.title || "Untitled"}</Tag>;
+    }
+    case "loop-excerpt": {
+      const raw = (post.excerpt || (post.content ? String(post.content).replace(/<[^>]+>/g, "") : "")).trim();
+      const len = Number(p.length) || 120;
+      const ex = raw.length > len ? raw.slice(0, len) + "…" : raw;
+      return ex ? <div style={{ padding: "4px 16px" }}><p style={{ margin: 0, fontSize: String(p.size || "0.9rem"), color: String(p.color || toks.colors.textMuted), lineHeight: 1.65 }}>{ex}</p></div> : null;
+    }
+    case "loop-date":
+      return <div style={{ padding: "4px 16px" }}><span style={{ fontSize: String(p.size || "11px"), color: String(p.color || toks.colors.textMuted) }}>{dateStr}</span></div>;
+    case "loop-author":
+      return <div style={{ padding: "4px 16px" }}><span style={{ fontSize: String(p.size || "11px"), color: String(p.color || toks.colors.textMuted) }}>{String(p.prefix || "By ")}Author</span></div>;
+    case "loop-read-more": {
+      const bs = String(p.buttonStyle || "link");
+      const bc = String(p.color || toks.colors.primary);
+      const bt = String(p.text || "Read More →");
+      if (bs === "button") return <div style={{ padding: "10px 16px 16px" }}><span style={{ display: "inline-block", background: bc, color: "#fff", padding: "8px 20px", borderRadius: toks.spacing.borderRadius, fontSize: String(p.size || "13px"), fontWeight: 600, cursor: "pointer" }}>{bt}</span></div>;
+      if (bs === "outline") return <div style={{ padding: "10px 16px 16px" }}><span style={{ display: "inline-block", border: `2px solid ${bc}`, color: bc, padding: "7px 18px", borderRadius: toks.spacing.borderRadius, fontSize: String(p.size || "13px"), fontWeight: 600, cursor: "pointer" }}>{bt}</span></div>;
+      return <div style={{ padding: "10px 16px 16px" }}><span style={{ fontSize: String(p.size || "13px"), fontWeight: 600, color: bc, cursor: "pointer" }}>{bt}</span></div>;
+    }
+    case "loop-custom-field":
+      return p.fieldKey ? <div style={{ padding: "4px 16px" }}><span style={{ fontSize: String(p.size || "13px"), color: String(p.color || toks.colors.textMuted), fontStyle: "italic" }}>[{String(p.fieldKey)}]</span></div> : null;
+    case "spacer":
+      return <div style={{ height: `${Number(p.height) || 16}px` }} />;
+    case "divider":
+      return <hr style={{ border: "none", borderTop: `1px solid ${toks.colors.border}`, margin: "8px 16px" }} />;
+    default:
+      return null;
+  }
+}
+
+function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTokens }) {
+  const p = block.props;
+  const [posts, setPosts] = useState<any[]>([]);
+  const [templateBlocks, setTemplateBlocks] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const templateId = String(p.loopTemplateId || "default-with-image");
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const [postsRes, tmplRes] = await Promise.all([
+          fetch(`/api/themes/query-preview?postType=${encodeURIComponent(String(p.postType || "post"))}&perPage=${Math.min(Number(p.perPage) || 6, 6)}&orderBy=${encodeURIComponent(String(p.orderBy || "date"))}&order=${encodeURIComponent(String(p.order || "DESC"))}`),
+          templateId.startsWith("default-")
+            ? Promise.resolve(null)
+            : fetch(`/api/themes/loop-templates/defaults/${encodeURIComponent(templateId)}`).catch(() => null),
+        ]);
+        const postsData = await postsRes.json() as any;
+        setPosts(Array.isArray(postsData.posts) ? postsData.posts : []);
+        if (tmplRes && tmplRes.ok) {
+          const td = await tmplRes.json() as any;
+          setTemplateBlocks(Array.isArray(td.blocks) ? td.blocks : null);
+        } else {
+          setTemplateBlocks(null);
+        }
+      } catch { setPosts([]); } finally { setLoading(false); }
+    }, 400);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [p.postType, p.perPage, p.orderBy, p.order, templateId]);
+
+  const cols = Number(p.columns) || 3;
+  const gap = String(p.gap || "24px");
+  const cardBg = String(p.cardBg || "#ffffff");
+  const cardBorder = String(p.cardBorder || "#e2e8f0");
+  const cardRadius = String(p.cardRadius || "8px");
+  const tmplBlocks = templateBlocks ?? DEFAULT_PREVIEW_TEMPLATES[templateId] ?? DEFAULT_PREVIEW_TEMPLATES["default-with-image"];
+  const isHorizontal = tmplBlocks.some((b: any) => b.type === "loop-image" && b.props?.layout === "horizontal");
+
+  return (
+    <div style={{ fontFamily: tokens.fonts.body, color: tokens.colors.text, padding: String(p.padding || "5rem 48px") }}>
+      <style>{`@keyframes ap-shimmer{from{background-position:-400px 0}to{background-position:400px 0}}`}</style>
+      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}>
+          {loading
+            ? Array.from({ length: Math.min(Number(p.perPage) || 6, 6) }).map((_, i) => (
+                <div key={i} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: cardRadius, overflow: "hidden" }}>
+                  <div style={{ height: "160px", background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)", backgroundSize: "400px 100%", animation: "ap-shimmer 1.4s infinite" }} />
+                  <div style={{ padding: "14px" }}>
+                    {[40, 100, 60, 80].map((w, j) => <div key={j} style={{ height: j === 1 ? "16px" : "10px", background: "#f0f0f0", borderRadius: "4px", marginBottom: "8px", width: `${w}%` }} />)}
+                  </div>
+                </div>
+              ))
+            : posts.length === 0
+              ? <div style={{ gridColumn: `1 / -1`, padding: "32px", textAlign: "center", color: tokens.colors.textMuted, fontSize: "13px", background: tokens.colors.surface, borderRadius: cardRadius }}>No published posts found for this query.</div>
+              : posts.map((post: any, i: number) => (
+                  <div key={i} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: cardRadius, overflow: "hidden", display: "flex", flexDirection: isHorizontal ? "row" : "column" }}>
+                    {isHorizontal ? <>
+                      <div style={{ width: String(tmplBlocks.find((b: any) => b.type === "loop-image")?.props?.width || "180px"), flexShrink: 0 }}>
+                        {tmplBlocks.filter((b: any) => b.type === "loop-image").map((b: any, j: number) => <LoopBlockNode key={j} b={b} post={post} toks={tokens} />)}
+                      </div>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                        {tmplBlocks.filter((b: any) => b.type !== "loop-image").map((b: any, j: number) => <LoopBlockNode key={j} b={b} post={post} toks={tokens} />)}
+                      </div>
+                    </> : tmplBlocks.map((b: any, j: number) => <LoopBlockNode key={j} b={b} post={post} toks={tokens} />)}
+                  </div>
+                ))
+          }
+        </div>
       </div>
     </div>
   );
@@ -280,37 +460,60 @@ function BlockPreview({ block, tokens, forms, isSelected, onPropChange, onReplac
       return <div style={{ padding: "24px 48px", ...sty }} dangerouslySetInnerHTML={{ __html: String(p.content || "") }} />;
     case "ai":
       return <AIBlockPreview block={block} tokens={tokens} isSelected={isSelected} onPropChange={onPropChange} onReplace={onReplace} />;
-    case "query-loop": {
-      const cols = Number(p.columns) || 3;
-      const count = Math.min(Number(p.perPage) || 6, 6);
-      const gap = String(p.gap || "24px");
-      const cardBg = String(p.cardBg || "#ffffff");
-      const cardBorder = String(p.cardBorder || "#e2e8f0");
-      const cardRadius = String(p.cardRadius || "8px");
-      const imgH = Number(p.imageHeight) || 200;
+    case "loop-image":
       return (
-        <div style={{ ...sty, padding: String(p.padding || "5rem 48px") }}>
-          <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}>
-              {Array.from({ length: count }).map((_, i) => (
-                <div key={i} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: cardRadius, overflow: "hidden" }}>
-                  {p.showImage !== false && <div style={{ height: `${imgH}px`, background: `linear-gradient(135deg, ${tokens.colors.surface} 0%, ${tokens.colors.border} 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={tokens.colors.border} strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  </div>}
-                  <div style={{ padding: "16px" }}>
-                    {p.showCategory !== false && <div style={{ fontSize: "10px", fontWeight: 700, color: tokens.colors.primary, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Category</div>}
-                    <div style={{ fontFamily: tokens.fonts.heading, fontWeight: 700, fontSize: "1rem", color: tokens.colors.text, marginBottom: "8px", lineHeight: 1.4 }}>Post Title {i + 1}</div>
-                    {p.showDate !== false && <div style={{ fontSize: "11px", color: tokens.colors.textMuted, marginBottom: "8px" }}>Jan {i + 1}, 2025</div>}
-                    {p.showExcerpt !== false && <div style={{ fontSize: "13px", color: tokens.colors.textMuted, lineHeight: 1.6, marginBottom: "12px" }}>A short excerpt from this post will appear here...</div>}
-                    {p.showAuthor !== false && <div style={{ fontSize: "11px", color: tokens.colors.textMuted }}>By Author Name</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div style={{ width: "100%", height: `${Number(p.height) || 220}px`, background: `linear-gradient(135deg, ${tokens.colors.surface}, ${tokens.colors.border})`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={tokens.colors.textMuted} strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </div>
       );
-    }
+    case "loop-category":
+      return (
+        <div style={{ padding: "0 16px 6px", paddingTop: editable ? "16px" : "0" }}>
+          <span style={{ fontSize: String(p.size || "10px"), fontWeight: 700, color: tokens.colors.primary, textTransform: "uppercase" as const, letterSpacing: "0.5px", ...(p.badge ? { background: tokens.colors.surface, border: `1px solid ${tokens.colors.border}`, borderRadius: tokens.spacing.borderRadius, padding: "2px 8px" } : {}) }}>Category</span>
+        </div>
+      );
+    case "loop-title":
+      return (
+        <div style={{ padding: "6px 16px" }}>
+          <div style={{ fontFamily: tokens.fonts.heading, fontWeight: Number(String(p.weight || "700")), fontSize: String(p.size || "1.05rem"), color: tokens.colors.text, lineHeight: 1.35 }}>Post Title Example</div>
+        </div>
+      );
+    case "loop-excerpt":
+      return (
+        <div style={{ padding: "4px 16px" }}>
+          <div style={{ fontSize: String(p.size || "0.9rem"), color: tokens.colors.textMuted, lineHeight: 1.6 }}>A short excerpt from the post will appear here, giving readers a preview of the content...</div>
+        </div>
+      );
+    case "loop-date":
+      return (
+        <div style={{ padding: "4px 16px" }}>
+          <span style={{ fontSize: String(p.size || "11px"), color: tokens.colors.textMuted }}>January 15, 2025</span>
+        </div>
+      );
+    case "loop-author":
+      return (
+        <div style={{ padding: "4px 16px" }}>
+          <span style={{ fontSize: String(p.size || "11px"), color: tokens.colors.textMuted }}>{String(p.prefix || "By ")}Author Name</span>
+        </div>
+      );
+    case "loop-read-more":
+      return (
+        <div style={{ padding: "10px 16px 16px" }}>
+          {String(p.buttonStyle || "link") === "button"
+            ? <div style={{ display: "inline-block", background: tokens.colors.primary, color: "#fff", padding: "8px 20px", borderRadius: tokens.spacing.borderRadius, fontSize: "13px", fontWeight: 600 }}>{String(p.text || "Read More →")}</div>
+            : <div style={{ fontSize: "13px", fontWeight: 600, color: tokens.colors.primary }}>{String(p.text || "Read More →")}</div>
+          }
+        </div>
+      );
+    case "loop-custom-field":
+      return (
+        <div style={{ padding: "4px 16px" }}>
+          {p.showLabel !== false && !!p.label && <span style={{ fontSize: "10px", fontWeight: 700, color: tokens.colors.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.5px", display: "block", marginBottom: "2px" }}>{String(p.label)}</span>}
+          <span style={{ fontSize: String(p.size || "13px"), color: tokens.colors.text }}>{p.fieldKey ? `[${String(p.fieldKey)}]` : <em style={{ color: tokens.colors.textMuted }}>Set field key in settings</em>}</span>
+        </div>
+      );
+    case "query-loop":
+      return <QueryLoopLivePreview block={block} tokens={tokens} />;
     default:
       return <div style={{ padding: "20px", color: "#999", fontStyle: "italic" }}>Unknown block type</div>;
   }
@@ -526,6 +729,61 @@ function MediaPicker({ onSelect, onClose }: { onSelect: (url: string) => void; o
   );
 }
 
+// ─── QueryLoopContent (extracted component to allow hooks) ────────────────────
+function QueryLoopContent({ p, set }: { p: Record<string, unknown>; set: (key: string) => (val: unknown) => void }) {
+  const [loopTemplates, setLoopTemplates] = useState<Array<{ id: string; name: string; isDefault?: boolean }>>([]);
+  useEffect(() => {
+    fetch("/api/themes/loop-templates").then(r => r.json()).then((data: any) => setLoopTemplates(Array.isArray(data) ? data : [])).catch(() => {});
+  }, []);
+  return <>
+    <Field name="Loop Item Template">
+      <select style={inp} value={String(p.loopTemplateId || "default-with-image")} onChange={e => set("loopTemplateId")(e.target.value)}>
+        <optgroup label="Built-in">
+          {loopTemplates.filter(t => t.isDefault).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </optgroup>
+        {loopTemplates.some(t => !t.isDefault) && <optgroup label="My Templates">
+          {loopTemplates.filter(t => !t.isDefault).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </optgroup>}
+      </select>
+      <a href="/admin/themes/loop-templates" target="_blank" style={{ fontSize: "11px", color: "#72aee6", display: "block", marginTop: "4px" }}>Manage Loop Templates ↗</a>
+    </Field>
+    <div style={{ fontWeight: 700, fontSize: "11px", color: "#8c8f94", textTransform: "uppercase" as const, letterSpacing: "0.5px", margin: "16px 0 10px", borderTop: "1px solid #3c434a", paddingTop: "12px" }}>Query</div>
+    <Field name="Post Type">
+      <select style={inp} value={String(p.postType || "post")} onChange={e => set("postType")(e.target.value)}>
+        <option value="post">Posts</option>
+        <option value="page">Pages</option>
+      </select>
+    </Field>
+    <Field name="Posts Per Page">
+      <input type="number" style={inp} value={Number(p.perPage) || 6} min={1} max={48} onChange={e => set("perPage")(Number(e.target.value))} />
+    </Field>
+    <Field name="Order By">
+      <Sel value={String(p.orderBy || "date")} onChange={set("orderBy")} options={[{ value: "date", label: "Date" }, { value: "title", label: "Title" }, { value: "modified", label: "Last Modified" }, { value: "rand", label: "Random" }]} />
+    </Field>
+    <Field name="Order">
+      <Sel value={String(p.order || "DESC")} onChange={set("order")} options={[{ value: "DESC", label: "Newest First" }, { value: "ASC", label: "Oldest First" }]} />
+    </Field>
+    <div style={{ fontWeight: 700, fontSize: "11px", color: "#8c8f94", textTransform: "uppercase" as const, letterSpacing: "0.5px", margin: "16px 0 10px", borderTop: "1px solid #3c434a", paddingTop: "12px" }}>Pagination</div>
+    <Field name="Pagination Type">
+      <Sel value={String(p.pagination || "none")} onChange={set("pagination")} options={[
+        { value: "none", label: "None" },
+        { value: "numbers", label: "Numbers" },
+        { value: "prev-next", label: "Previous / Next" },
+        { value: "load-more", label: "Load More Button" },
+        { value: "infinite-scroll", label: "Infinite Scroll" },
+      ]} />
+    </Field>
+    {String(p.pagination || "none") !== "none" && (
+      <Field name="Page Limit (0 = no limit)">
+        <input type="number" style={inp} value={Number(p.pageLimit) || 0} min={0} max={100} onChange={e => set("pageLimit")(Number(e.target.value))} />
+      </Field>
+    )}
+    {String(p.pagination) === "load-more" && (
+      <Field name="Button Label"><Inp value={String(p.loadMoreText || "Load More")} onChange={set("loadMoreText")} /></Field>
+    )}
+  </>;
+}
+
 // ─── Block Content Panels (data/media/text settings) ──────────────────────────
 function BlockContent({ block, onChange, forms, openMediaPicker }: { block: Block; onChange: (props: Record<string, unknown>) => void; forms?: FormOption[]; openMediaPicker?: (cb: (url: string) => void) => void }) {
   const p = block.props;
@@ -619,35 +877,76 @@ function BlockContent({ block, onChange, forms, openMediaPicker }: { block: Bloc
       </>;
     }
 
-    case "query-loop": {
-      const toggles: [string, string][] = [["showImage", "Featured Image"], ["showDate", "Date"], ["showExcerpt", "Excerpt"], ["showAuthor", "Author"], ["showCategory", "Category"]];
+    case "query-loop":
+      return <QueryLoopContent p={p} set={set} />;
+
+    case "loop-image":
       return <>
-        <Field name="Post Type">
-          <select style={inp} value={String(p.postType || "post")} onChange={e => set("postType")(e.target.value)}>
-            <option value="post">Posts</option>
-            <option value="page">Pages</option>
-          </select>
+        <Field name="Image Height (px)">
+          <input type="number" style={inp} value={Number(p.height) || 220} min={80} max={600} step={20} onChange={e => set("height")(Number(e.target.value))} />
         </Field>
-        <Field name="Posts Per Page">
-          <input type="number" style={inp} value={Number(p.perPage) || 6} min={1} max={48} onChange={e => set("perPage")(Number(e.target.value))} />
+        <Field name="Object Fit">
+          <Sel value={String(p.objectFit || "cover")} onChange={set("objectFit")} options={[{ value: "cover", label: "Cover (crop)" }, { value: "contain", label: "Contain" }, { value: "fill", label: "Fill" }]} />
         </Field>
-        <Field name="Order By">
-          <Sel value={String(p.orderBy || "date")} onChange={set("orderBy")} options={[{ value: "date", label: "Date" }, { value: "title", label: "Title" }, { value: "modified", label: "Last Modified" }, { value: "rand", label: "Random" }]} />
-        </Field>
-        <Field name="Order">
-          <Sel value={String(p.order || "DESC")} onChange={set("order")} options={[{ value: "DESC", label: "Newest First" }, { value: "ASC", label: "Oldest First" }]} />
-        </Field>
-        <div style={fld}>
-          <label style={{ ...lbl, marginBottom: "8px" }}>Card Elements</label>
-          {toggles.map(([key, label]) => (
-            <label key={key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", cursor: "pointer" }}>
-              <input type="checkbox" checked={p[key] !== false} onChange={e => set(key)(e.target.checked)} style={{ accentColor: "#72aee6" }} />
-              <span style={{ fontSize: "12px", color: "#a7aaad" }}>{label}</span>
-            </label>
-          ))}
-        </div>
       </>;
-    }
+    case "loop-title":
+      return <>
+        <Field name="HTML Tag">
+          <Sel value={String(p.tag || "h3")} onChange={set("tag")} options={[{ value: "h2", label: "H2" }, { value: "h3", label: "H3" }, { value: "h4", label: "H4" }, { value: "p", label: "p" }]} />
+        </Field>
+        <Field name="Font Size"><Inp value={String(p.size || "1.05rem")} onChange={set("size")} placeholder="1.05rem" /></Field>
+        <Field name="Font Weight">
+          <Sel value={String(p.weight || "700")} onChange={set("weight")} options={[{ value: "400", label: "Normal" }, { value: "600", label: "Semi Bold" }, { value: "700", label: "Bold" }, { value: "800", label: "Extra Bold" }]} />
+        </Field>
+      </>;
+    case "loop-excerpt":
+      return <>
+        <Field name="Max Characters">
+          <input type="number" style={inp} value={Number(p.length) || 120} min={20} max={500} step={10} onChange={e => set("length")(Number(e.target.value))} />
+        </Field>
+        <Field name="Font Size"><Inp value={String(p.size || "0.9rem")} onChange={set("size")} placeholder="0.9rem" /></Field>
+      </>;
+    case "loop-date":
+      return <>
+        <Field name="Format">
+          <Sel value={String(p.format || "long")} onChange={set("format")} options={[{ value: "long", label: "Long (Jan 15, 2025)" }, { value: "short", label: "Short (01/15/25)" }, { value: "relative", label: "Relative (2 days ago)" }, { value: "iso", label: "ISO (2025-01-15)" }]} />
+        </Field>
+        <Field name="Font Size"><Inp value={String(p.size || "11px")} onChange={set("size")} placeholder="11px" /></Field>
+      </>;
+    case "loop-author":
+      return <>
+        <Field name="Prefix"><Inp value={String(p.prefix || "By ")} onChange={set("prefix")} placeholder="By " /></Field>
+        <Field name="Font Size"><Inp value={String(p.size || "11px")} onChange={set("size")} placeholder="11px" /></Field>
+      </>;
+    case "loop-category":
+      return <>
+        <div style={fld}><label style={{ ...lbl, marginBottom: "8px" }}>Show as Badge</label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+            <input type="checkbox" checked={!!p.badge} onChange={e => set("badge")(e.target.checked)} style={{ accentColor: "#72aee6" }} />
+            <span style={{ fontSize: "12px", color: "#a7aaad" }}>Pill/badge style</span>
+          </label>
+        </div>
+        <Field name="Font Size"><Inp value={String(p.size || "10px")} onChange={set("size")} placeholder="10px" /></Field>
+      </>;
+    case "loop-read-more":
+      return <>
+        <Field name="Label"><Inp value={String(p.text || "Read More →")} onChange={set("text")} placeholder="Read More →" /></Field>
+        <Field name="Style">
+          <Sel value={String(p.buttonStyle || "link")} onChange={set("buttonStyle")} options={[{ value: "link", label: "Text Link" }, { value: "button", label: "Button" }, { value: "outline", label: "Outline Button" }]} />
+        </Field>
+      </>;
+    case "loop-custom-field":
+      return <>
+        <Field name="Meta Key (field_key)"><Inp value={String(p.fieldKey || "")} onChange={set("fieldKey")} placeholder="e.g. price, rating, sku" /></Field>
+        <Field name="Label"><Inp value={String(p.label || "")} onChange={set("label")} placeholder="e.g. Price" /></Field>
+        <div style={fld}><label style={{ ...lbl, marginBottom: "8px" }}>Show Label</label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+            <input type="checkbox" checked={p.showLabel !== false} onChange={e => set("showLabel")(e.target.checked)} style={{ accentColor: "#72aee6" }} />
+            <span style={{ fontSize: "12px", color: "#a7aaad" }}>Display label above value</span>
+          </label>
+        </div>
+        <Field name="Fallback (if empty)"><Inp value={String(p.fallback || "")} onChange={set("fallback")} placeholder="—" /></Field>
+      </>;
 
     default:
       return <p style={{ color: "#8c8f94", fontSize: "12px" }}>No content settings.</p>;
@@ -655,7 +954,7 @@ function BlockContent({ block, onChange, forms, openMediaPicker }: { block: Bloc
 }
 
 // ─── Block Style Panels (visual/layout settings) ──────────────────────────────
-function BlockStyle({ block, onChange }: { block: Block; onChange: (props: Record<string, unknown>) => void }) {
+function BlockStyle({ block, onChange, tokens }: { block: Block; onChange: (props: Record<string, unknown>) => void; tokens: ThemeTokens }) {
   const p = block.props;
   const set = (key: string) => (val: unknown) => onChange({ ...p, [key]: val });
 
@@ -712,13 +1011,34 @@ function BlockStyle({ block, onChange }: { block: Block; onChange: (props: Recor
           <Sel value={String(p.columns || "3")} onChange={v => set("columns")(Number(v))} options={[{ value: "1", label: "1 Column" }, { value: "2", label: "2 Columns" }, { value: "3", label: "3 Columns" }, { value: "4", label: "4 Columns" }]} />
         </Field>
         <Field name="Card Gap"><Inp value={String(p.gap || "24px")} onChange={set("gap")} placeholder="24px" /></Field>
-        <Field name="Image Height (px)">
-          <input type="number" style={inp} value={Number(p.imageHeight) || 200} min={80} max={600} step={20} onChange={e => set("imageHeight")(Number(e.target.value))} />
-        </Field>
         <ColorField name="Card Background" value={String(p.cardBg || "#ffffff")} onChange={set("cardBg")} />
         <ColorField name="Card Border" value={String(p.cardBorder || "#e2e8f0")} onChange={set("cardBorder")} />
         <Field name="Card Border Radius"><Inp value={String(p.cardRadius || "8px")} onChange={set("cardRadius")} placeholder="8px" /></Field>
         <Field name="Section Padding"><Inp value={String(p.padding || "5rem 48px")} onChange={set("padding")} placeholder="5rem 48px" /></Field>
+      </>;
+
+    case "loop-image":
+      return <Field name="Border Radius"><Inp value={String(p.borderRadius || "0")} onChange={set("borderRadius")} placeholder="0" /></Field>;
+    case "loop-title":
+      return <ColorField name="Color (leave blank for theme default)" value={String(p.color || tokens.colors.text)} onChange={set("color")} />;
+    case "loop-excerpt":
+      return <ColorField name="Text Color" value={String(p.color || tokens.colors.textMuted)} onChange={set("color")} />;
+    case "loop-date":
+      return <ColorField name="Text Color" value={String(p.color || tokens.colors.textMuted)} onChange={set("color")} />;
+    case "loop-author":
+      return <ColorField name="Text Color" value={String(p.color || tokens.colors.textMuted)} onChange={set("color")} />;
+    case "loop-category":
+      return <ColorField name="Color" value={String(p.color || tokens.colors.primary)} onChange={set("color")} />;
+    case "loop-read-more":
+      return <>
+        <ColorField name="Text / Button Color" value={String(p.color || tokens.colors.primary)} onChange={set("color")} />
+        {String(p.buttonStyle) !== "link" && <Field name="Font Size"><Inp value={String(p.size || "13px")} onChange={set("size")} /></Field>}
+      </>;
+    case "loop-custom-field":
+      return <>
+        <Field name="Font Size"><Inp value={String(p.size || "13px")} onChange={set("size")} placeholder="13px" /></Field>
+        <ColorField name="Text Color" value={String(p.color || tokens.colors.text)} onChange={set("color")} />
+        <ColorField name="Label Color" value={String(p.labelColor || tokens.colors.textMuted)} onChange={set("labelColor")} />
       </>;
 
     default:
@@ -929,7 +1249,7 @@ function ConditionsPanel({ templateId, conditions, onChange }: {
 type LeftPanel = "palette" | "block" | "theme" | "conditions";
 type BlockTab = "content" | "style" | "advanced";
 
-export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTokens, forms = [], isTemplate = false, templatePart, templateId, initialConditions = [], siteUrl = "" }: Props) {
+export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTokens, forms = [], isTemplate = false, isLoopItem = false, templatePart, templateId, initialConditions = [], siteUrl = "" }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [tokens, setTokens] = useState<ThemeTokens>(initialTokens);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -969,7 +1289,7 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
-  const palette = isTemplate ? TEMPLATE_PALETTE : CONTENT_PALETTE;
+  const palette = isLoopItem ? LOOP_PALETTE : isTemplate ? TEMPLATE_PALETTE : CONTENT_PALETTE;
   const selectedBlock = blocks.find(b => b.id === selectedId) ?? null;
 
   const selectBlock = useCallback((id: string) => {
@@ -1262,7 +1582,7 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
           <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #3c434a", flexShrink: 0 }}>
             <button onClick={deselectBlock} style={{ ...S.backBtn, padding: "12px 16px", borderBottom: "none", width: "auto", flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
-              Elements
+              {isLoopItem ? "Loop Blocks" : "Elements"}
             </button>
             <span style={{ fontSize: "11px", fontWeight: 700, color: "#72aee6", flex: 1, textAlign: "center", paddingRight: "8px", textTransform: "capitalize" }}>{blockLabel}</span>
           </div>
@@ -1279,7 +1599,7 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
             {blockTab === "content"
               ? <BlockContent block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} forms={forms} openMediaPicker={openMediaPicker} />
               : blockTab === "style"
-              ? <BlockStyle block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} />
+              ? <BlockStyle block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} tokens={tokens} />
               : <BlockAdvanced block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} />
             }
           </div>
@@ -1369,12 +1689,19 @@ export default function ThemeEditor({ slug, pageTitle, initialBlocks, initialTok
     <div style={S.root}>
       {/* Toolbar */}
       <div style={S.toolbar}>
-        {isTemplate ? (
+        {isLoopItem ? (
+          <a href="/admin/themes/loop-templates" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Loop Templates</a>
+        ) : isTemplate ? (
           <a href="/admin/themes/builder" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Builder</a>
         ) : (
           <a href="/admin/themes" style={{ color: "#a7aaad", textDecoration: "none", fontSize: "12px", marginRight: "4px", flexShrink: 0 }}>← Themes</a>
         )}
         <div style={{ width: "1px", height: "20px", background: "#3c434a", flexShrink: 0 }} />
+        {isLoopItem && (
+          <span style={{ fontSize: "11px", background: "#0e7490", color: "#fff", padding: "2px 8px", borderRadius: "3px", fontWeight: 600, flexShrink: 0 }}>
+            LOOP TEMPLATE
+          </span>
+        )}
         {isTemplate && templatePart && (
           <span style={{ fontSize: "11px", background: "#7c3aed", color: "#fff", padding: "2px 8px", borderRadius: "3px", fontWeight: 600, flexShrink: 0 }}>
             {(TEMPLATE_TYPE_LABELS[templatePart] ?? templatePart).toUpperCase()}

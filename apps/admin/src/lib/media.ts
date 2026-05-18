@@ -38,7 +38,7 @@ export async function listMedia(
     .offset(offset);
 
   // Fetch URLs from postmeta
-  const ids = rows.map((r) => r.id);
+  const ids = rows.map((r: any) => r.id);
   let metaMap: Record<number, string> = {};
 
   if (ids.length > 0) {
@@ -60,7 +60,7 @@ export async function listMedia(
   const siteUrl = (import.meta.env.MEDIA_BASE_URL ?? import.meta.env.SITE_URL ?? "http://localhost:4321").replace(/\/$/, "");
 
   return {
-    items: rows.map((r) => ({
+    items: rows.map((r: any) => ({
       id: r.id,
       title: r.postTitle,
       filename: metaMap[r.id] ?? "",

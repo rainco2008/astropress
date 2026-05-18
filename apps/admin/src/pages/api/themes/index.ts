@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
-  const body = await request.json();
+  const body = await request.json() as any;
   const now = new Date().toISOString();
 
   const newTheme: Theme = {

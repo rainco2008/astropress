@@ -83,7 +83,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
-  const { prompt, currentBlocks, singleBlock } = await request.json();
+  const { prompt, currentBlocks, singleBlock } = await request.json() as any;
   if (!prompt?.trim()) {
     return new Response(JSON.stringify({ error: "Prompt is required" }), {
       status: 400,

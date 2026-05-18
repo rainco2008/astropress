@@ -41,7 +41,7 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
       .select({ objectId: wpTermRelationships.objectId })
       .from(wpTermRelationships)
       .where(eq(wpTermRelationships.termTaxonomyId, tt.id));
-    const ids = rels.map(r => r.objectId);
+    const ids = rels.map((r: any) => r.objectId);
 
     // Delete relationships
     await db.delete(wpTermRelationships).where(eq(wpTermRelationships.termTaxonomyId, tt.id));

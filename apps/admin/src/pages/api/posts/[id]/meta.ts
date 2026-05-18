@@ -12,7 +12,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
     .from(wpPostmeta)
     .where(eq(wpPostmeta.postId, postId));
 
-  const meta = Object.fromEntries(rows.map((r) => [r.key ?? "", r.value ?? ""]));
+  const meta = Object.fromEntries(rows.map((r: any) => [r.key ?? "", r.value ?? ""]));
   return new Response(JSON.stringify(meta), {
     headers: { "Content-Type": "application/json" },
   });

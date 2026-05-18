@@ -48,7 +48,7 @@ export async function getSiteOptions(db: Database): Promise<SiteOptions> {
     .where(
       sql`${wpOptions.optionName} IN ('blogname','blogdescription','siteurl')`
     );
-  const map = Object.fromEntries(rows.map((r) => [r.name, r.value]));
+  const map = Object.fromEntries(rows.map((r: any) => [r.name, r.value]));
   return {
     blogname: map.blogname ?? "AstroPress",
     blogdescription: map.blogdescription ?? "",
@@ -167,7 +167,7 @@ export async function getNavMenu(
     .orderBy(wpPosts.menuOrder);
 
   // Fetch URLs from postmeta
-  const ids = items.map((i) => i.id);
+  const ids = items.map((i: any) => i.id);
   let urlMap: Record<number, string> = {};
 
   if (ids.length > 0) {
@@ -181,7 +181,7 @@ export async function getNavMenu(
     }
   }
 
-  return items.map((i) => ({
+  return items.map((i: any) => ({
     id: i.id,
     title: i.title,
     url: urlMap[i.id] ?? "#",

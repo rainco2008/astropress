@@ -21,7 +21,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
       )
     );
 
-  return new Response(JSON.stringify(rows.map((r) => r.termTaxonomyId)), {
+  return new Response(JSON.stringify(rows.map((r: any) => r.termTaxonomyId)), {
     headers: { "Content-Type": "application/json" },
   });
 };
@@ -42,7 +42,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
     .from(wpTermTaxonomy)
     .where(eq(wpTermTaxonomy.taxonomy, taxonomy));
 
-  const ttIdSet = allTTIds.map((r) => r.id);
+  const ttIdSet = allTTIds.map((r: any) => r.id);
 
   if (ttIdSet.length > 0) {
     await db

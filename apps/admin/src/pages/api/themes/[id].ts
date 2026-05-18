@@ -43,12 +43,12 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
   const { id } = params;
-  const body = await request.json();
+  const body = await request.json() as any;
   const themes = await loadThemes(db);
   const idx = themes.findIndex(t => t.id === id);
   if (idx === -1) return new Response("Not found", { status: 404 });
 
-  themes[idx] = { ...themes[idx], ...body, id: themes[idx].id, updatedAt: new Date().toISOString() };
+  themes[idx] = { ...themes[idx], ...(body as object), id: themes[idx].id, updatedAt: new Date().toISOString() };
   await saveThemes(db, themes);
 
   // If this is the active theme, sync tokens to astropress_theme_config
@@ -88,7 +88,7 @@ export const POST: APIRoute = async ({ locals, params }) => {
   if (!theme) return new Response("Not found", { status: 404 });
 
   // Set active theme id
-  await upsertOption(db, "astropress_active_theme", id);
+  await upsertOption(db, "astropress_active_theme", id!);
   // Apply tokens to the global config so all pages pick it up immediately
   await upsertOption(db, "astropress_theme_config", JSON.stringify(theme.tokens));
 

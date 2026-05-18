@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (!locals.user || !db) return new Response("Unauthorized", { status: 401 });
 
   const taxonomy = params.taxonomy!;
-  const { name } = await request.json();
+  const { name } = await request.json() as any;
   if (!name?.trim()) {
     return new Response(JSON.stringify({ error: "Name is required" }), {
       status: 400,

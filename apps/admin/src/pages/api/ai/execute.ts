@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   let actions: ActionRequest[];
 
   try {
-    const body = await request.json();
+    const body = await request.json() as any;
     // Accept either { action: {...} } or { actions: [...] }
     actions = Array.isArray(body.actions) ? body.actions : [body.action];
   } catch {

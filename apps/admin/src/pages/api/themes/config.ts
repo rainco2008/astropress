@@ -31,7 +31,7 @@ export const PUT: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
-  const tokens = await request.json();
+  const tokens = await request.json() as any;
 
   // Save global config
   await upsertOption(db, "astropress_theme_config", JSON.stringify(tokens));
