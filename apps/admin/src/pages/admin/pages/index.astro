@@ -1,6 +1,8 @@
 ---
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { listPosts } from "../../../lib/posts";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
 
 const db = Astro.locals.db;
 if (!Astro.locals.user || !db) return Astro.redirect("/login");
@@ -13,6 +15,11 @@ const { posts, total } = await listPosts(db, { type: "page", status, page });
 const perPage = 20;
 const totalPages = Math.ceil(total / perPage);
 const isTrash = status === "trash";
+
+// Load front page setting
+const [showRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "show_on_front")).limit(1);
+const [frontRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "page_on_front")).limit(1);
+const frontPageId = (showRow?.value === "page" && frontRow?.value && frontRow.value !== "0") ? Number(frontRow.value) : null;
 
 const statusOptions = [
   { value: "", label: "All" },
@@ -102,10 +109,19 @@ const statusOptions = [
                     {p.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
                   </a>
                 </strong>
+                {p.id === frontPageId && (
+                  <span style="display:inline-block;margin-left:8px;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:#e8f0fb;color:#2271b1;border:1px solid #b3c9e8;vertical-align:middle">Front Page</span>
+                )}
                 <div style="font-size:11px;color:#8c8f94;font-family:monospace;margin-top:2px">/{p.slug}</div>
                 <div class="row-actions">
                   {!isTrash && <span class="edit"><a href={`/admin/pages/${p.id}`}>Edit</a> | </span>}
                   {!isTrash && <span class="view"><a href={`/${p.slug}`} target="_blank" rel="noopener">View</a> | </span>}
+                  {!isTrash && p.id !== frontPageId && (
+                    <span class="make-home"><button onclick={`setFrontPage(${p.id})`} class="ap-row-delete-btn" style="color:#2271b1">Set as Homepage</button> | </span>
+                  )}
+                  {!isTrash && p.id === frontPageId && (
+                    <span class="remove-home"><button onclick="removeFrontPage()" class="ap-row-delete-btn" style="color:#646970">Remove as Homepage</button> | </span>
+                  )}
                   {!isTrash && (
                     <span class="trash">
                       <button onclick={`apBulkSingle('trash',${p.id})`} class="ap-row-delete-btn">Trash</button>
@@ -204,6 +220,18 @@ window.applyBulkAction = async function () {
   var res = await fetch('/api/posts/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, ids: ids }) });
   if (res.ok) { location.reload(); }
   else { var d = await res.json().catch(function () { return {}; }); alert(d.error || 'Action failed.'); }
+};
+
+window.setFrontPage = async function (pageId) {
+  var res = await fetch('/api/pages/set-front', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pageId: pageId }) });
+  if (res.ok) { location.reload(); }
+  else { var d = await res.json().catch(function () { return {}; }); alert(d.error || 'Failed to set homepage.'); }
+};
+
+window.removeFrontPage = async function () {
+  var res = await fetch('/api/pages/set-front', { method: 'DELETE' });
+  if (res.ok) { location.reload(); }
+  else { alert('Failed to remove homepage setting.'); }
 };
 
 window.apBulkSingle = async function (action, id) {

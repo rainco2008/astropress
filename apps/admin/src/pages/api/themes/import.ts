@@ -86,8 +86,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   // 4. Create pages
   const createdPages: string[] = [];
+  let frontPageId: number | null = null;
   for (const pageDef of (createPages ? (pkg.pages ?? []) : [])) {
-    const slug = pageDef.slug.replace(/^\//, "");
+    const rawSlug = String(pageDef.slug || "").trim();
+    // "/" maps to the front page — use slug "home" and mark as front page
+    const isHomePage = rawSlug === "/" || rawSlug === "";
+    const slug = isHomePage ? "home" : rawSlug.replace(/^\//, "");
     if (!slug) continue;
 
     const existing = await db.select({ id: wpPosts.id }).from(wpPosts).where(eq(wpPosts.postName, slug)).limit(1);
@@ -111,7 +115,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const blocks = (pageDef.blocks ?? []).map((b: any) => ({ ...b, id: uid() }));
       await upsertOption(db, `astropress_page_schema_${slug}`, JSON.stringify({ version: 1, blocks }), "no");
       createdPages.push(slug);
+      if (isHomePage) frontPageId = postId;
     }
+  }
+
+  // Set front page if a home page was created
+  if (frontPageId) {
+    await upsertOption(db, "show_on_front", "page");
+    await upsertOption(db, "page_on_front", String(frontPageId));
   }
 
   return new Response(JSON.stringify({
