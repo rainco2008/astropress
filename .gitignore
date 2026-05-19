@@ -9,3 +9,7 @@ dist/
 !.env.example
 .wrangler/
 local.db
+
+# Uploaded media files
+apps/admin/public/media/
+apps/web/public/media/

@@ -25,6 +25,9 @@ const [schemaRow] = post.slug ? await db
 
 const hasSchema = !!(schemaRow?.value && JSON.parse(schemaRow.value)?.blocks?.length > 0);
 
+const [siteUrlRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "siteurl")).limit(1);
+const siteUrl = (siteUrlRow?.value ?? "http://localhost:4322").replace(/\/$/, "");
+
 // Always default to visual editor unless ?classic=1 is set
 if (!classic) {
   if (post.slug) return Astro.redirect(`/admin/themes/edit/${post.slug}`);
@@ -54,7 +57,7 @@ if (!classic) {
       <div id="permalink-row" style="font-size:12px;color:#646970;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
         <span>Permalink:</span>
         <span id="permalink-view" style="display:inline-flex;align-items:center;gap:4px">
-          <a id="permalink-link" href={post.slug ? `/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `/${post.slug}` : "—"}</a>
+          <a id="permalink-link" href={post.slug ? `${siteUrl}/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `${siteUrl}/${post.slug}` : "—"}</a>
           <button onclick="startEditSlug()" style="font-size:11px;color:#2271b1;background:none;border:none;padding:0 2px;cursor:pointer;font-family:inherit;text-decoration:underline">Edit</button>
         </span>
         <span id="permalink-edit" style="display:none;align-items:center;gap:4px">
@@ -103,7 +106,7 @@ if (!classic) {
     </aside>
   </div>
 
-  <div id="page-meta" data-post-id={id} data-initial-slug={post.slug} style="display:none"></div>
+  <div id="page-meta" data-post-id={id} data-initial-slug={post.slug} data-site-url={siteUrl} style="display:none"></div>
   <script is:inline>
     (function() {
       var meta = document.getElementById("page-meta");
@@ -111,12 +114,13 @@ if (!classic) {
       var initialSlug = meta.dataset.initialSlug || "";
       var currentSlug = initialSlug;
       var slugLocked = false;
+      var siteUrl = meta.dataset.siteUrl || "";
 
       function slugify(s) { return s.toLowerCase().trim().replace(/[^\w\s-]/g,"").replace(/[\s_]+/g,"-").replace(/^-+|-+$/g,""); }
 
       function setPermalinkDisplay(slug) {
         var link = document.getElementById("permalink-link");
-        if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
+        if (link) { link.textContent = slug ? (siteUrl + "/" + slug) : "—"; link.href = slug ? (siteUrl + "/" + slug) : "#"; }
         var input = document.getElementById("post-slug");
         if (input) input.value = slug;
         currentSlug = slug;
@@ -126,7 +130,7 @@ if (!classic) {
         if (slugLocked) return;
         var preview = slugify(t);
         var link = document.getElementById("permalink-link");
-        if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
+        if (link) { link.textContent = preview ? (siteUrl + "/" + preview) : "—"; link.href = preview ? (siteUrl + "/" + preview) : "#"; }
       };
 
       window.startEditSlug = function() {

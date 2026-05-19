@@ -15,6 +15,9 @@ try {
 
 forms.sort((a: any, b: any) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 
+const [siteUrlRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "siteurl")).limit(1);
+const siteUrl = (siteUrlRow?.value ?? "http://localhost:4322").replace(/\/$/, "");
+
 function fieldCount(form: any) {
   return (form.fields ?? []).filter((f: any) =>
     !["page_break", "section_divider", "html"].includes(f.type)
@@ -66,7 +69,7 @@ function fieldCount(form: any) {
                   <a href={`/admin/forms/${form.id}/entries`}>Entries</a> |
                 </span>
                 <span class="view">
-                  <a href={`/forms/${form.id}`} target="_blank" rel="noopener">Preview</a> |
+                  <a href={`${siteUrl}/forms/${form.id}`} target="_blank" rel="noopener">Preview</a> |
                 </span>
                 <span class="trash">
                   <button

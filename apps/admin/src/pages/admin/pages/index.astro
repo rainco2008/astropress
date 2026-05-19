@@ -21,6 +21,9 @@ const [showRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptio
 const [frontRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "page_on_front")).limit(1);
 const frontPageId = (showRow?.value === "page" && frontRow?.value && frontRow.value !== "0") ? Number(frontRow.value) : null;
 
+const [siteUrlRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "siteurl")).limit(1);
+const siteUrl = (siteUrlRow?.value ?? "http://localhost:4322").replace(/\/$/, "");
+
 const statusOptions = [
   { value: "", label: "All" },
   { value: "publish", label: "Published" },
@@ -115,7 +118,7 @@ const statusOptions = [
                 <div style="font-size:11px;color:#8c8f94;font-family:monospace;margin-top:2px">/{p.slug}</div>
                 <div class="row-actions">
                   {!isTrash && <span class="edit"><a href={`/admin/pages/${p.id}`}>Edit</a> | </span>}
-                  {!isTrash && <span class="view"><a href={`/${p.slug}`} target="_blank" rel="noopener">View</a> | </span>}
+                  {!isTrash && <span class="view"><a href={`${siteUrl}/${p.slug}`} target="_blank" rel="noopener">View</a> | </span>}
                   {!isTrash && p.id !== frontPageId && (
                     <span class="make-home"><button onclick={`setFrontPage(${p.id})`} class="ap-row-delete-btn" style="color:#2271b1">Set as Homepage</button> | </span>
                   )}

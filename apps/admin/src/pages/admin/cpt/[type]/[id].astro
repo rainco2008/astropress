@@ -6,6 +6,8 @@ import { getSidebarPanels, getPostType, getTaxonomies } from "@astropress/core/r
 import SeoPanel from "../../../../islands/SeoPanel";
 import CustomFieldsPanel from "../../../../islands/CustomFieldsPanel";
 import TaxonomyPanel from "../../../../islands/TaxonomyPanel";
+import { wpOptions } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
 
 const db = Astro.locals.db;
 const user = Astro.locals.user;
@@ -19,6 +21,9 @@ if (!postTypeConfig) return Astro.redirect("/admin/dashboard");
 
 const post = await getPost(db, id);
 if (!post) return Astro.redirect(`/admin/cpt/${type}`);
+
+const [siteUrlRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "siteurl")).limit(1);
+const siteUrl = (siteUrlRow?.value ?? "http://localhost:4322").replace(/\/$/, "");
 
 const panels = getSidebarPanels(type);
 const backUrl = `/admin/cpt/${type}`;
@@ -49,6 +54,7 @@ if (isVisual && post.slug) {
     data-post-id={String(id)}
     data-initial-slug={post.slug ?? ""}
     data-back-url={backUrl}
+    data-site-url={siteUrl}
     style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start">
 
     <!-- Left: Title + Block editor -->
@@ -64,7 +70,7 @@ if (isVisual && post.slug) {
       <div id="permalink-row" style="font-size:12px;color:#646970;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
         <span>Permalink:</span>
         <span id="permalink-view" style="display:inline-flex;align-items:center;gap:4px">
-          <a id="permalink-link" href={post.slug ? `/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `/${post.slug}` : "—"}</a>
+          <a id="permalink-link" href={post.slug ? `${siteUrl}/${post.slug}` : "#"} target="_blank" style="color:#2271b1;text-decoration:none" rel="noopener">{post.slug ? `${siteUrl}/${post.slug}` : "—"}</a>
           <button onclick="startEditSlug()" style="font-size:11px;color:#2271b1;background:none;border:none;padding:0 2px;cursor:pointer;font-family:inherit;text-decoration:underline">Edit</button>
         </span>
         <span id="permalink-edit" style="display:none;align-items:center;gap:4px">
@@ -144,7 +150,7 @@ if (isVisual && post.slug) {
       <!-- View link -->
       {post.status === "publish" && (
         <div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:12px 14px;margin-bottom:16px;font-size:12px">
-          <a href={`/${post.slug}`} target="_blank" style="color:#2271b1">View {postTypeConfig.label.toLowerCase()} →</a>
+          <a href={`${siteUrl}/${post.slug}`} target="_blank" style="color:#2271b1">View {postTypeConfig.label.toLowerCase()} →</a>
         </div>
       )}
 
@@ -188,6 +194,7 @@ if (isVisual && post.slug) {
       var postId = root.dataset.postId;
       var backUrl = root.dataset.backUrl;
       var currentSlug = root.dataset.initialSlug;
+      var siteUrl = root.dataset.siteUrl || "";
 
       function slugify(str) {
         return str.toLowerCase().trim()
@@ -202,12 +209,12 @@ if (isVisual && post.slug) {
         if (slugLocked) return;
         var preview = slugify(title);
         var link = document.getElementById("permalink-link");
-        if (link) { link.textContent = preview ? "/" + preview : "—"; link.href = preview ? "/" + preview : "#"; }
+        if (link) { link.textContent = preview ? (siteUrl + "/" + preview) : "—"; link.href = preview ? (siteUrl + "/" + preview) : "#"; }
       };
 
       function setPermalinkDisplay(slug) {
         var link = document.getElementById("permalink-link");
-        if (link) { link.textContent = slug ? "/" + slug : "—"; link.href = slug ? "/" + slug : "#"; }
+        if (link) { link.textContent = slug ? (siteUrl + "/" + slug) : "—"; link.href = slug ? (siteUrl + "/" + slug) : "#"; }
         var input = document.getElementById("post-slug");
         if (input) input.value = slug;
         currentSlug = slug;
