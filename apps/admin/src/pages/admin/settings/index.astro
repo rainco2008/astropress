@@ -80,11 +80,13 @@ const opts = Object.fromEntries(rows.map((r: any) => [r.name, r.value]));
           </tr>
 
           <tr>
-            <th><label for="siteurl">Site URL</label></th>
+            <th><label for="siteurl">Frontend URL</label></th>
             <td>
               <input id="siteurl" name="siteurl" type="url"
                 value={opts.siteurl ?? ""}
+                placeholder="http://localhost:4322"
                 class="wp-input regular-text" />
+              <p class="description">The URL of your web/frontend app (e.g. <code>http://localhost:4322</code>). Used for all View and Preview links in the admin.</p>
             </td>
           </tr>
 

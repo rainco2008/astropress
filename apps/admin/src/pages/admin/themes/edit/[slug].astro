@@ -112,7 +112,7 @@ const [siteUrlRow] = await db
   .from(wpOptions)
   .where(eq(wpOptions.optionName, "siteurl"))
   .limit(1);
-const siteUrl = siteUrlRow?.value ?? "";
+const siteUrl = (siteUrlRow?.value ?? "http://localhost:4322").replace(/\/$/, "");
 
 const displayTitle = isLoopItem
   ? pageTitle + " — Loop Template"
