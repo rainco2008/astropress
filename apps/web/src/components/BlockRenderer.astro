@@ -240,13 +240,17 @@ function renderBlock(block: Block, queryData?: any[], queryTotal?: number, query
 </section>`;
     }
 
-    case "text":
+    case "text": {
+      const textBg = String(p.bgColor || "transparent");
+      const textColor = String(p.textColor || tokens.colors.text);
+      const textPad = textBg !== "transparent" ? tokens.spacing.sectionY + " 48px" : tokens.spacing.sectionY + " 48px";
       return `
-<section class="ap-block ap-block-text" style="padding:${tokens.spacing.sectionY} 48px;max-width:${tokens.spacing.containerMax};margin:0 auto;text-align:${esc(p.align || "left")};">
-  <div style="font-family:${tokens.fonts.body};font-size:1.05rem;line-height:1.75;color:${tokens.colors.text};">
+<section class="ap-block ap-block-text" style="background:${textBg};padding:${textPad};text-align:${esc(p.align || "left")};">
+  <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;font-family:${tokens.fonts.body};font-size:1.05rem;line-height:1.75;color:${textColor};">
     ${String(p.content || "")}
   </div>
 </section>`;
+    }
 
     case "image": {
       const maxW = p.width === "full" ? "100%" : p.width === "wide" ? "900px" : "640px";
@@ -270,30 +274,37 @@ function renderBlock(block: Block, queryData?: any[], queryTotal?: number, query
     case "features": {
       const items = (p.items as any[]) || [];
       const cols = Number(p.cols) || 3;
+      const featBg = String(p.bgColor || "transparent");
+      const featTextColor = String(p.textColor || tokens.colors.text);
+      const featCardBg = String(p.cardBg || tokens.colors.surface);
       const itemsHtml = items.map(item => `
-<div style="padding:28px;background:${tokens.colors.surface};border-radius:${tokens.spacing.borderRadius};border:1px solid ${tokens.colors.border};">
+<div style="padding:28px;background:${featCardBg};border-radius:${tokens.spacing.borderRadius};border:1px solid ${tokens.colors.border};">
   <div style="font-size:2rem;margin-bottom:12px;">${esc(item.icon || "★")}</div>
-  <h3 style="font-family:${tokens.fonts.heading};margin:0 0 8px;font-size:1.05rem;">${esc(item.title)}</h3>
-  <p style="margin:0;color:${tokens.colors.textMuted};font-size:0.95rem;line-height:1.6;">${esc(item.text)}</p>
+  <h3 style="font-family:${tokens.fonts.heading};margin:0 0 8px;font-size:1.05rem;color:${featTextColor};">${esc(item.title)}</h3>
+  <p style="margin:0;color:${String(p.mutedColor || tokens.colors.textMuted)};font-size:0.95rem;line-height:1.6;">${esc(item.text)}</p>
 </div>`).join("");
       return `
-<section class="ap-block ap-block-features" style="padding:${tokens.spacing.sectionY} 48px;text-align:center;">
+<section class="ap-block ap-block-features" style="background:${featBg};padding:${tokens.spacing.sectionY} 48px;text-align:center;">
   <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;">
-    ${p.heading ? `<h2 style="font-family:${tokens.fonts.heading};font-size:2rem;font-weight:700;margin:0 0 12px;">${esc(p.heading)}</h2>` : ""}
-    ${p.subtext ? `<p style="color:${tokens.colors.textMuted};margin:0 0 48px;font-size:1.05rem;">${esc(p.subtext)}</p>` : ""}
+    ${p.heading ? `<h2 style="font-family:${tokens.fonts.heading};font-size:2rem;font-weight:700;margin:0 0 12px;color:${featTextColor};">${esc(p.heading)}</h2>` : ""}
+    ${p.subtext ? `<p style="color:${String(p.mutedColor || tokens.colors.textMuted)};margin:0 0 48px;font-size:1.05rem;">${esc(p.subtext)}</p>` : ""}
     <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:28px;text-align:left;">${itemsHtml}</div>
   </div>
 </section>`;
     }
 
-    case "columns":
+    case "columns": {
+      const colsBg = String(p.bgColor || "transparent");
+      const colsTextColor = String(p.textColor || tokens.colors.text);
+      const colRatio = String(p.ratio || "1fr 1fr");
       return `
-<section class="ap-block ap-block-columns" style="padding:${tokens.spacing.sectionY} 48px;">
-  <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:${esc(p.gap || "2rem")};">
-    <div style="font-family:${tokens.fonts.body};line-height:1.75;">${String(p.leftContent || "")}</div>
-    <div style="font-family:${tokens.fonts.body};line-height:1.75;">${String(p.rightContent || "")}</div>
+<section class="ap-block ap-block-columns" style="background:${colsBg};padding:${tokens.spacing.sectionY} 48px;">
+  <div style="max-width:${tokens.spacing.containerMax};margin:0 auto;display:grid;grid-template-columns:${colRatio};gap:${esc(p.gap || "2rem")};align-items:${esc(p.align || "start")};">
+    <div style="font-family:${tokens.fonts.body};line-height:1.75;color:${colsTextColor};">${String(p.leftContent || "")}</div>
+    <div style="font-family:${tokens.fonts.body};line-height:1.75;color:${colsTextColor};">${String(p.rightContent || "")}</div>
   </div>
 </section>`;
+    }
 
     case "form": {
       const formId = String(p.formId || "");

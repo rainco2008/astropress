@@ -215,6 +215,7 @@ const icons = adminIcons;
 
       /* ─── WP list table ───────────────────────────────────────────────── */
       .wp-list-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--wp-white); border: 1px solid var(--wp-gray-300); }
+      .wp-list-table.fixed { table-layout: fixed; }
       .wp-list-table thead th { text-align: left; padding: 8px 10px; background: var(--wp-gray-50); border-bottom: 1px solid var(--wp-gray-300); font-weight: 600; color: var(--wp-gray-900); font-size: 13px; }
       .wp-list-table tbody tr { border-bottom: 1px solid var(--wp-gray-200); }
       .wp-list-table tbody tr:last-child { border-bottom: none; }
@@ -222,6 +223,8 @@ const icons = adminIcons;
       .wp-list-table tbody tr:nth-child(even) { background: var(--wp-white); }
       .wp-list-table tbody tr:hover { background: #f0f6fc; }
       .wp-list-table td { padding: 9px 10px; vertical-align: top; }
+      .wp-list-table tbody th { padding: 9px 10px; vertical-align: top; font-weight: 400; text-align: left; }
+      .wp-list-table tbody th.check-column { padding: 9px 0 0 3px; text-align: center; }
       .wp-list-table .column-title { font-weight: 600; }
       .wp-list-table .row-actions { font-size: 11px; color: var(--wp-gray-500); margin-top: 3px; visibility: hidden; }
       .wp-list-table tbody tr:hover .row-actions { visibility: visible; }
@@ -252,8 +255,17 @@ const icons = adminIcons;
       hr.wp-header-end { border: none; border-top: 1px solid var(--wp-gray-200); margin: 8px 0 16px; }
 
       /* ─── Tablenav / pagination ───────────────────────────────────────── */
-      .tablenav { display: flex; align-items: center; justify-content: flex-end; margin: 8px 0; }
-      .tablenav-pages { display: flex; gap: 4px; }
+      .tablenav { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; min-height: 36px; }
+      .tablenav-pages { display: flex; gap: 4px; align-items: center; }
+      .tablenav .alignleft { display: flex; align-items: center; gap: 6px; }
+      .tablenav .displaying-num { font-size: 13px; color: var(--wp-gray-600); margin-left: 8px; }
+      .bulkactions select { height: 28px; line-height: 26px; padding: 0 6px; font-size: 13px; font-family: var(--wp-font); border: 1px solid var(--wp-gray-400); border-radius: var(--wp-radius); background: var(--wp-white); color: var(--wp-gray-900); cursor: pointer; }
+      .bulkactions .button { height: 28px; line-height: 26px; padding: 0 10px; }
+
+      /* ─── Check column (bulk select) ──────────────────────────────────── */
+      .wp-list-table .check-column { width: 2.2em; text-align: center; }
+      .wp-list-table thead th.check-column { padding: 8px 0 6px; vertical-align: middle; text-align: center; }
+      .wp-list-table .check-column input[type="checkbox"] { margin: 0; cursor: pointer; vertical-align: middle; }
 
       /* ─── Empty state ─────────────────────────────────────────────────── */
       .ap-empty-state { background: var(--wp-white); border: 1px solid var(--wp-gray-300); padding: 48px 32px; text-align: center; display: flex; flex-direction: column; align-items: center; max-width: 480px; margin-top: 20px; }

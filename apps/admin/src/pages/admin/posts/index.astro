@@ -3,15 +3,16 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { listPosts } from "../../../lib/posts";
 
 const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
 const status = Astro.url.searchParams.get("status") ?? undefined;
 const page = Number(Astro.url.searchParams.get("page") ?? "1");
 
-const { posts, total } = db
-  ? await listPosts(db, { type: "post", status, page })
-  : { posts: [], total: 0 };
+const { posts, total } = await listPosts(db, { type: "post", status, page });
 
 const perPage = 20;
 const totalPages = Math.ceil(total / perPage);
+const isTrash = status === "trash";
 
 const statusOptions = [
   { value: "", label: "All" },
@@ -55,62 +56,173 @@ const statusOptions = [
       <a href="/admin/posts/new" class="button button-primary">Add Your First Post</a>
     </div>
   ) : (
-    <table class="wp-list-table widefat fixed striped">
-      <thead>
-        <tr>
-          <th scope="col" class="manage-column column-primary">Title</th>
-          <th scope="col" class="manage-column" style="width:100px">Status</th>
-          <th scope="col" class="manage-column" style="width:120px">Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {posts.map((post) => (
-          <tr>
-            <td class="title column-title has-row-actions column-primary">
-              <strong>
-                <a href={`/admin/posts/${post.id}`} class="row-title">
-                  {post.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
-                </a>
-              </strong>
-              <div class="row-actions">
-                <span class="edit"><a href={`/admin/posts/${post.id}`}>Edit</a></span> |
-                <span class="trash">
-                  <button
-                    onclick={`if(confirm('Move to trash?'))fetch('/api/posts/${post.id}',{method:'DELETE'}).then(()=>location.reload())`}
-                    class="ap-row-delete-btn"
-                  >Trash</button>
-                </span>
-              </div>
-            </td>
-            <td>
-              <span style={`display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : post.status === "trash" ? "#f8d7da" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : post.status === "trash" ? "#842029" : "#997404"}`}>
-                {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
-              </span>
-            </td>
-            <td style="color:var(--wp-gray-600);font-size:12px">
-              {post.date.slice(0, 10)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )}
-
-  {totalPages > 1 && (
-    <div class="tablenav bottom">
-      <div class="tablenav-pages">
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-          <a
-            href={`/admin/posts?page=${p}${status ? `&status=${status}` : ""}`}
-            class={p === page ? "button button-disabled" : "button"}
-            style={p === page ? "font-weight:700" : ""}
-          >
-            {p}
-          </a>
-        ))}
+    <form id="bulk-action-form">
+      <!-- Top tablenav -->
+      <div class="tablenav top">
+        <div class="alignleft actions bulkactions">
+          <select class="bulk-action-selector" id="bulk-action-selector-top">
+            <option value="-1">Bulk actions</option>
+            {isTrash ? (
+              <>
+                <option value="restore">Restore</option>
+                <option value="delete">Delete Permanently</option>
+              </>
+            ) : (
+              <>
+                <option value="trash">Move to Trash</option>
+                <option value="publish">Publish</option>
+                <option value="draft">Move to Draft</option>
+              </>
+            )}
+          </select>
+          <button type="button" onclick="applyBulkAction()" class="button action">Apply</button>
+        </div>
+        <div class="tablenav-pages" style="line-height:28px">
+          <span class="displaying-num">{total} item{total !== 1 ? "s" : ""}</span>
+        </div>
       </div>
-    </div>
+
+      <table class="wp-list-table widefat fixed striped">
+        <thead>
+          <tr>
+            <th scope="col" class="manage-column column-cb check-column" style="width:2.2em">
+              <input type="checkbox" id="cb-select-all-1" title="Select all" />
+            </th>
+            <th scope="col" class="manage-column column-primary">Title</th>
+            <th scope="col" class="manage-column" style="width:100px">Status</th>
+            <th scope="col" class="manage-column" style="width:120px">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {posts.map((post) => (
+            <tr>
+              <th scope="row" class="check-column">
+                <input type="checkbox" class="cb-select-posts" value={String(post.id)} />
+              </th>
+              <td class="title column-title has-row-actions column-primary">
+                <strong>
+                  <a href={`/admin/posts/${post.id}`} class="row-title">
+                    {post.title || <em style="font-weight:400;color:#8c8f94">Untitled</em>}
+                  </a>
+                </strong>
+                <div class="row-actions">
+                  {!isTrash && <span class="edit"><a href={`/admin/posts/${post.id}`}>Edit</a> | </span>}
+                  {!isTrash && (
+                    <span class="trash">
+                      <button onclick={`apBulkSingle('trash',${post.id})`} class="ap-row-delete-btn">Trash</button>
+                    </span>
+                  )}
+                  {isTrash && (
+                    <>
+                      <span class="untrash"><button onclick={`apBulkSingle('restore',${post.id})`} class="ap-row-delete-btn" style="color:#2271b1">Restore</button> | </span>
+                      <span class="delete"><button onclick={`apBulkSingle('delete',${post.id})`} class="ap-row-delete-btn">Delete Permanently</button></span>
+                    </>
+                  )}
+                </div>
+              </td>
+              <td>
+                <span style={`display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${post.status === "publish" ? "#d1e7dd" : post.status === "trash" ? "#f8d7da" : "#fff3cd"};color:${post.status === "publish" ? "#146c43" : post.status === "trash" ? "#842029" : "#997404"}`}>
+                  {post.status === "publish" ? "Published" : post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                </span>
+              </td>
+              <td style="color:var(--wp-gray-600);font-size:12px">{post.date.slice(0, 10)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <!-- Bottom tablenav -->
+      <div class="tablenav bottom">
+        <div class="alignleft actions bulkactions">
+          <select class="bulk-action-selector" id="bulk-action-selector-bottom">
+            <option value="-1">Bulk actions</option>
+            {isTrash ? (
+              <>
+                <option value="restore">Restore</option>
+                <option value="delete">Delete Permanently</option>
+              </>
+            ) : (
+              <>
+                <option value="trash">Move to Trash</option>
+                <option value="publish">Publish</option>
+                <option value="draft">Move to Draft</option>
+              </>
+            )}
+          </select>
+          <button type="button" onclick="applyBulkAction()" class="button action">Apply</button>
+        </div>
+        {totalPages > 1 && (
+          <div class="tablenav-pages">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <a
+                href={`/admin/posts?page=${p}${status ? `&status=${status}` : ""}`}
+                class={p === page ? "button button-disabled" : "button"}
+                style={p === page ? "font-weight:700" : ""}
+              >
+                {p}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </form>
   )}
 
 </AdminLayout>
 
+<script is:inline>
+// Extensible bulk actions registry — plugins can push { value, label, handler } here
+window.apBulkActions = window.apBulkActions || [];
+
+(function () {
+  // Sync both selectors
+  document.querySelectorAll('.bulk-action-selector').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      document.querySelectorAll('.bulk-action-selector').forEach(function (s) { s.value = sel.value; });
+    });
+  });
+
+  // Select all
+  var selectAll = document.getElementById('cb-select-all-1');
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.cb-select-posts').forEach(function (cb) { cb.checked = selectAll.checked; });
+    });
+  }
+  document.querySelectorAll('.cb-select-posts').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      if (selectAll) selectAll.checked = document.querySelectorAll('.cb-select-posts:not(:checked)').length === 0;
+    });
+  });
+})();
+
+window.applyBulkAction = async function () {
+  var sel = document.querySelector('.bulk-action-selector');
+  var action = sel ? sel.value : '-1';
+  if (!action || action === '-1') { alert('Please select an action.'); return; }
+
+  var ids = Array.from(document.querySelectorAll('.cb-select-posts:checked')).map(function (cb) { return parseInt(cb.value); });
+  if (ids.length === 0) { alert('Please select at least one item.'); return; }
+
+  // Check plugin-registered handlers first
+  var custom = (window.apBulkActions || []).find(function (a) { return a.value === action && a.handler; });
+  if (custom) { return custom.handler(ids); }
+
+  var confirmMsg = action === 'delete'
+    ? 'Permanently delete ' + ids.length + ' item(s)? This cannot be undone.'
+    : 'Apply to ' + ids.length + ' item(s)?';
+  if (!confirm(confirmMsg)) return;
+
+  var res = await fetch('/api/posts/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, ids: ids }) });
+  if (res.ok) { location.reload(); }
+  else { var d = await res.json().catch(function () { return {}; }); alert(d.error || 'Action failed.'); }
+};
+
+window.apBulkSingle = async function (action, id) {
+  var confirmMsg = action === 'delete' ? 'Permanently delete this item? This cannot be undone.' : action === 'trash' ? 'Move to trash?' : null;
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  var res = await fetch('/api/posts/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, ids: [id] }) });
+  if (res.ok) { location.reload(); }
+  else { var d = await res.json().catch(function () { return {}; }); alert(d.error || 'Action failed.'); }
+};
+</script>

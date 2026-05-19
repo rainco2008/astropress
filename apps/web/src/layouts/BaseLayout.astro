@@ -26,11 +26,19 @@ let headerBlocks: any[] | null = null;
 let footerBlocks: any[] | null = null;
 let tokens: ThemeTokens = DEFAULT_THEME_TOKENS;
 let formsById: Record<string, any> = {};
+let themeCustomCss: string | null = null;
 
 if (db) {
   // 1. Load theme tokens
   const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
   if (tokenRow?.value) tokens = JSON.parse(tokenRow.value);
+
+  // 1b. Load active theme custom CSS
+  const [activeThemeRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_active_theme")).limit(1);
+  if (activeThemeRow?.value) {
+    const [cssRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, `astropress_theme_css_${activeThemeRow.value}`)).limit(1);
+    if (cssRow?.value) themeCustomCss = cssRow.value;
+  }
 
   // 2. Load active template slots (simple key → schemaSlug map)
   const [slotsRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_template_slots")).limit(1);
@@ -88,6 +96,7 @@ const metaDesc = description || site.blogdescription;
     <title>{pageTitle}</title>
     {metaDesc && <meta name="description" content={metaDesc} />}
     <style set:html={themeStyles} />
+    {themeCustomCss && <style set:html={themeCustomCss} />}
     <style set:html={`
       :root {
         --color-primary: ${tokens.colors.primary};
