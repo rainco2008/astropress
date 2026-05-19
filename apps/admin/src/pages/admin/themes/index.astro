@@ -103,7 +103,7 @@ const siteUrl = siteUrlRow?.value ?? "http://localhost:4322";
     <h1 class="wp-heading-inline" style="margin:0">Themes</h1>
     <div style="display:flex;gap:8px">
       <a href="/admin/themes/builder" class="button">Theme Builder</a>
-      <button onclick="document.getElementById('new-theme-modal').style.display='flex'" class="button button-primary">Add New Theme</button>
+      <a href="/admin/themes/add" class="button button-primary">Add New Theme</a>
     </div>
   </div>
   <hr class="wp-header-end" />
@@ -145,32 +145,6 @@ const siteUrl = siteUrlRow?.value ?? "http://localhost:4322";
     })}
   </div>
 
-  <!-- New Theme Modal -->
-  <div id="new-theme-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:9999">
-    <div style="background:#fff;border-radius:6px;padding:28px;width:440px;max-width:90vw">
-      <h2 style="margin:0 0 20px;font-size:18px">Create New Theme</h2>
-      <div style="margin-bottom:14px">
-        <label class="wp-form-label">Theme Name</label>
-        <input id="new-theme-name" type="text" class="wp-input" style="width:100%" placeholder="My Custom Theme" />
-      </div>
-      <div style="margin-bottom:14px">
-        <label class="wp-form-label">Description</label>
-        <input id="new-theme-desc" type="text" class="wp-input" style="width:100%" placeholder="Optional description" />
-      </div>
-      <div style="margin-bottom:20px">
-        <label class="wp-form-label">Start from</label>
-        <select id="new-theme-clone" class="wp-input" style="width:100%">
-          <option value="">Blank (default tokens)</option>
-          {themes.map(t => <option value={t.id}>{t.name}</option>)}
-        </select>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('new-theme-modal').style.display='none'" class="button">Cancel</button>
-        <button onclick="createTheme()" class="button button-primary">Create Theme</button>
-      </div>
-    </div>
-  </div>
-
 
 </AdminLayout>
 
@@ -193,32 +167,6 @@ const siteUrl = siteUrlRow?.value ?? "http://localhost:4322";
       }
     };
 
-    window.createTheme = async function () {
-      const name = document.getElementById('new-theme-name').value.trim();
-      if (!name) { alert('Theme name is required'); return; }
-      const desc = document.getElementById('new-theme-desc').value.trim();
-      const cloneId = document.getElementById('new-theme-clone').value;
 
-      let cloneFrom = null;
-      if (cloneId) {
-        const res = await fetch('/api/themes');
-        const data = await res.json();
-        const src = data.themes?.find(function(t) { return t.id === cloneId; });
-        if (src) cloneFrom = src.tokens;
-      }
-
-      const res = await fetch('/api/themes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, description: desc, cloneFrom: cloneFrom }),
-      });
-      const data = await res.json();
-      if (res.ok && data.theme) {
-        window.location.href = '/admin/themes/customize/' + data.theme.id;
-      } else {
-        alert('Failed to create theme');
-      }
-    };
-
-  })();
+})();
 </script>

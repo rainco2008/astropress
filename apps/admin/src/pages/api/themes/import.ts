@@ -19,9 +19,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
 
   let pkg: ThemePackage;
+  let createPages = true;
   try {
     const body = await request.json() as any;
     pkg = body.package ?? body;
+    if (typeof body.createPages === "boolean") createPages = body.createPages;
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
@@ -80,7 +82,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   // 4. Create pages (as published wp_posts + page schemas)
   const createdPages: string[] = [];
-  for (const pageDef of pkg.pages ?? []) {
+  for (const pageDef of (createPages ? (pkg.pages ?? []) : [])) {
     const slug = pageDef.slug.replace(/^\//, "");
     if (!slug) continue;
 
