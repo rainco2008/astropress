@@ -21,22 +21,28 @@ export const GET: APIRoute = async ({ url, locals }) => {
     sql`${wpPosts.postStatus} NOT IN ('auto-draft', 'trash')`
   );
 
-  const rows = await db
-    .select({
-      id: wpPosts.id,
-      title: wpPosts.postTitle,
-      slug: wpPosts.postName,
-      excerpt: wpPosts.postExcerpt,
-      content: wpPosts.postContent,
-      type: wpPosts.postType,
-      date: wpPosts.postDate,
-    })
-    .from(wpPosts)
-    .where(where)
-    .orderBy(order === "ASC" ? asc(orderCol) : desc(orderCol))
-    .limit(perPage);
+  const [rows, [countRow]] = await Promise.all([
+    db
+      .select({
+        id: wpPosts.id,
+        title: wpPosts.postTitle,
+        slug: wpPosts.postName,
+        excerpt: wpPosts.postExcerpt,
+        content: wpPosts.postContent,
+        type: wpPosts.postType,
+        date: wpPosts.postDate,
+      })
+      .from(wpPosts)
+      .where(where)
+      .orderBy(order === "ASC" ? asc(orderCol) : desc(orderCol))
+      .limit(perPage),
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(wpPosts)
+      .where(where),
+  ]);
 
-  return new Response(JSON.stringify({ posts: rows }), {
+  return new Response(JSON.stringify({ posts: rows, total: Number(countRow?.total ?? 0) }), {
     headers: { "Content-Type": "application/json" },
   });
 };

@@ -258,6 +258,7 @@ function LoopBlockNode({ b, post, toks }: { b: any; post: any; toks: ThemeTokens
 function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTokens }) {
   const p = block.props;
   const [posts, setPosts] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [templateBlocks, setTemplateBlocks] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -278,13 +279,14 @@ function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTo
         ]);
         const postsData = await postsRes.json() as any;
         setPosts(Array.isArray(postsData.posts) ? postsData.posts : []);
+        setTotal(Number(postsData.total) || 0);
         if (tmplRes && tmplRes.ok) {
           const td = await tmplRes.json() as any;
           setTemplateBlocks(Array.isArray(td.blocks) ? td.blocks : null);
         } else {
           setTemplateBlocks(null);
         }
-      } catch { setPosts([]); } finally { setLoading(false); }
+      } catch { setPosts([]); setTotal(0); } finally { setLoading(false); }
     }, 400);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [p.postType, p.perPage, p.orderBy, p.order, templateId]);
@@ -327,14 +329,45 @@ function QueryLoopLivePreview({ block, tokens }: { block: Block; tokens: ThemeTo
                 ))
           }
         </div>
-        {String(p.pagination || "none") !== "none" && !loading && (
-          <div style={{ marginTop: "16px", textAlign: "center", fontSize: "12px", color: tokens.colors.textMuted, borderTop: `1px solid ${tokens.colors.border}`, paddingTop: "12px" }}>
-            {String(p.pagination) === "numbers" && "Page numbers will appear here on the frontend"}
-            {String(p.pagination) === "prev-next" && "Previous / Next links will appear here on the frontend"}
-            {String(p.pagination) === "load-more" && `"${String(p.loadMoreText || "Load More")}" button will appear here on the frontend`}
-            {String(p.pagination) === "infinite-scroll" && "Infinite scroll is enabled — more posts load automatically"}
-          </div>
-        )}
+        {!loading && String(p.pagination || "none") !== "none" && (() => {
+          const perPage = Number(p.perPage) || 6;
+          const pageLimit = Number(p.pageLimit) || 0;
+          const totalPages = Math.max(2, total > 0 ? Math.ceil(total / perPage) : 3); // always show at least 2 pages in preview
+          const effectivePages = pageLimit > 0 ? Math.max(2, Math.min(totalPages, pageLimit)) : totalPages;
+          const paginationType = String(p.pagination);
+          const btnBase: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 16px", border: `1px solid ${tokens.colors.border}`, borderRadius: "4px", fontSize: "13px", color: tokens.colors.text, background: tokens.colors.surface, cursor: "default", userSelect: "none" };
+          const activeBtn: React.CSSProperties = { ...btnBase, background: tokens.colors.primary, color: "#fff", borderColor: tokens.colors.primary, fontWeight: 700 };
+          const numBtn: React.CSSProperties = { ...btnBase, width: "36px", height: "36px", padding: 0 };
+          const activeNumBtn: React.CSSProperties = { ...numBtn, background: tokens.colors.primary, color: "#fff", borderColor: tokens.colors.primary, fontWeight: 700 };
+
+          return (
+            <div style={{ marginTop: "24px", borderTop: `1px solid ${tokens.colors.border}`, paddingTop: "20px" }}>
+              {paginationType === "numbers" && effectivePages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", gap: "6px", flexWrap: "wrap" }}>
+                  {Array.from({ length: Math.min(effectivePages, 7) }, (_, i) => i + 1).map(n => (
+                    <div key={n} style={n === 1 ? activeNumBtn : numBtn}>{n}</div>
+                  ))}
+                  {effectivePages > 7 && <div style={{ ...numBtn, border: "none", background: "transparent" }}>…</div>}
+                </div>
+              )}
+              {paginationType === "prev-next" && effectivePages > 1 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ ...btnBase, opacity: 0.4 }}>← Previous</div>
+                  <span style={{ fontSize: "13px", color: tokens.colors.textMuted }}>Page 1 of {effectivePages}</span>
+                  <div style={btnBase}>Next →</div>
+                </div>
+              )}
+              {paginationType === "load-more" && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ ...activeBtn, borderRadius: "6px", fontWeight: 600, padding: "10px 28px", cursor: "default" }}>{String(p.loadMoreText || "Load More")}</div>
+                </div>
+              )}
+              {paginationType === "infinite-scroll" && (
+                <div style={{ textAlign: "center", fontSize: "12px", color: tokens.colors.textMuted, fontStyle: "italic" }}>Infinite scroll — more posts load as you scroll</div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

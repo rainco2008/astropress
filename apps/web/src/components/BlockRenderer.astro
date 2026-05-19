@@ -21,7 +21,8 @@ const { blocks, tokens, formsById = {}, navItems = [], siteTitle = "", siteTagli
 const db = Astro.locals.db;
 const queryLoopData: Record<string, any[]> = {};
 const queryLoopTotal: Record<string, number> = {};
-const currentPaged = Number(Astro.url.searchParams.get("paged") || "1");
+const _pagedParam = Astro.url.searchParams.get("paged");
+const currentPaged = _pagedParam ? Math.max(1, Number(_pagedParam)) : 1;
 
 for (const block of blocks) {
   if (block.type === "query-loop" && db) {
@@ -39,8 +40,6 @@ for (const block of blocks) {
       });
       queryLoopData[block.id] = posts;
       queryLoopTotal[block.id] = total;
-      // Store current page and total in block props for pagination rendering
-      block.props = { ...block.props, _currentPage: currentPaged, _totalPosts: total };
     } catch { queryLoopData[block.id] = []; queryLoopTotal[block.id] = 0; }
   }
 }
@@ -225,7 +224,7 @@ function renderLoopTemplate(loopBlocks: any[], post: any, toks: ThemeTokens, met
   }).join("");
 }
 
-function renderBlock(block: Block, queryData?: any[]): string {
+function renderBlock(block: Block, queryData?: any[], queryTotal?: number, queryCurrentPage?: number): string {
   const p = block.props;
 
   switch (block.type) {
@@ -346,10 +345,10 @@ function renderBlock(block: Block, queryData?: any[]): string {
       const el = String(p._element || "section");
       const templateId = String(p.loopTemplateId || "default-with-image");
       const paginationType = String(p.pagination || "none");
-      const currentPage = Number(p._currentPage) || 1;
+      const currentPage = queryCurrentPage ?? 1;
       const perPage = Number(p.perPage) || 6;
       const pageLimit = Number(p.pageLimit) || 0;
-      const totalPosts = Number(p._totalPosts) || posts.length;
+      const totalPosts = typeof queryTotal === "number" ? queryTotal : posts.length;
 
       // Get loop template blocks
       let templateBlocks: any[] = loopTemplateCache[templateId] ?? DEFAULT_LOOP_TEMPLATE_BLOCKS[templateId] ?? DEFAULT_LOOP_TEMPLATE_BLOCKS["default-with-image"];
@@ -397,14 +396,12 @@ function renderBlock(block: Block, queryData?: any[]): string {
 
         if (paginationType === "numbers" && effectiveTotalPages > 1) {
           const pageLinks = Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).map(n => {
-            const url = new URL(Astro.url.href);
-            url.searchParams.set("paged", String(n));
-            return `<a href="${esc(url.toString())}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:4px;font-size:14px;font-weight:${n === currentPage ? "700" : "400"};background:${n === currentPage ? tokens.colors.primary : "transparent"};color:${n === currentPage ? "#fff" : tokens.colors.text};border:1px solid ${n === currentPage ? tokens.colors.primary : tokens.colors.border};text-decoration:none;">${n}</a>`;
+            return `<a href="?paged=${n}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:4px;font-size:14px;font-weight:${n === currentPage ? "700" : "400"};background:${n === currentPage ? tokens.colors.primary : "transparent"};color:${n === currentPage ? "#fff" : tokens.colors.text};border:1px solid ${n === currentPage ? tokens.colors.primary : tokens.colors.border};text-decoration:none;">${n}</a>`;
           }).join("");
           paginationHtml = `<div style="display:flex;justify-content:center;gap:6px;margin-top:40px;flex-wrap:wrap;">${pageLinks}</div>`;
         } else if (paginationType === "prev-next" && effectiveTotalPages > 1) {
-          const prevHref = currentPage > 1 ? (() => { const u = new URL(Astro.url.href); u.searchParams.set("paged", String(currentPage - 1)); return u.toString(); })() : null;
-          const nextHref = currentPage < effectiveTotalPages ? (() => { const u = new URL(Astro.url.href); u.searchParams.set("paged", String(currentPage + 1)); return u.toString(); })() : null;
+          const prevHref = currentPage > 1 ? `?paged=${currentPage - 1}` : null;
+          const nextHref = currentPage < effectiveTotalPages ? `?paged=${currentPage + 1}` : null;
           paginationHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:40px;">
             ${prevHref ? `<a href="${esc(prevHref)}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border:1px solid ${tokens.colors.border};border-radius:${tokens.spacing.borderRadius};color:${tokens.colors.text};text-decoration:none;font-size:14px;">\u2190 Previous</a>` : `<span></span>`}
             <span style="font-size:13px;color:${tokens.colors.textMuted};">Page ${currentPage} of ${effectiveTotalPages}</span>
@@ -451,7 +448,7 @@ function wrapBlock(block: Block, inner: string): string {
   return customCss + inner.replace(/^(\s*<[a-zA-Z]+)([ >])/, `$1${cssClass}${animation}$2`);
 }
 
-const html = blocks.map(block => wrapBlock(block, renderBlock(block, queryLoopData[block.id]))).join("\n");
+const html = blocks.map(block => wrapBlock(block, renderBlock(block, queryLoopData[block.id], queryLoopTotal[block.id], currentPaged))).join("\n");
 ---
 <style>
   @keyframes ap-fade-in { from { opacity:0 } to { opacity:1 } }
