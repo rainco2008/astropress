@@ -82,6 +82,7 @@ function makeNewsletterForm(title: string): any {
 export const POST: APIRoute = async ({ locals, request }) => {
   const db = locals.db;
   if (!db || !locals.user) return new Response("Unauthorized", { status: 401 });
+  const cfAI = (locals as any).runtime?.env?.AI;
 
   const { prompt, currentBlocks, singleBlock } = await request.json() as any;
   if (!prompt?.trim()) {
@@ -109,7 +110,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const provider: string = settings.activeProvider ?? "anthropic";
   const cfg = settings.providers?.[provider];
 
-  if (!cfg?.apiKey || cfg.enabled === false) {
+  if (provider !== "cloudflare-ai" && (!cfg?.apiKey || cfg.enabled === false)) {
     return new Response(
       JSON.stringify({ error: `Provider "${provider}" is not configured or disabled. Visit Settings → AI.` }),
       { status: 400, headers: { "Content-Type": "application/json" } }
@@ -147,7 +148,9 @@ ${forms.map(f => `- formId: "${f.id}", formTitle: "${f.title}"`).join("\n")}`;
   try {
     let raw: string;
 
-    if (provider === "anthropic") {
+    if (provider === "cloudflare-ai") {
+      raw = await callCloudflareAI(cfAI, cfg?.defaultModel ?? "@cf/meta/llama-3.1-8b-instruct", fullSystemPrompt, messages);
+    } else if (provider === "anthropic") {
       raw = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", fullSystemPrompt, messages);
     } else if (provider === "openai") {
       raw = await callOpenAI(cfg.apiKey, cfg.defaultModel ?? "gpt-4o", fullSystemPrompt, messages);
@@ -233,6 +236,17 @@ ${forms.map(f => `- formId: "${f.id}", formTitle: "${f.title}"`).join("\n")}`;
 // ─── Provider implementations (mirrors chat.ts exactly) ───────────────────────
 
 interface Msg { role: "user" | "assistant"; content: string; }
+
+async function callCloudflareAI(ai: any, model: string, system: string, messages: Msg[]): Promise<string> {
+  if (!ai) throw new Error("Cloudflare Workers AI binding not available. Add an AI binding named \"AI\" in the Cloudflare dashboard under Workers & Pages → your project → Settings → Bindings.");
+  const result = await ai.run(model, {
+    messages: [
+      { role: "system", content: system },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
+  }) as any;
+  return result.response ?? result.text ?? JSON.stringify(result);
+}
 
 async function callAnthropic(apiKey: string, model: string, system: string, messages: Msg[]): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {

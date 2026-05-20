@@ -7,6 +7,16 @@ const PROVIDERS = [
     models: [],
   },
   {
+    id: "cloudflare-ai",
+    name: "Cloudflare Workers AI (no API key needed)",
+    note: "Uses the AI binding from your Cloudflare dashboard. Add an AI binding named \"AI\" in Workers & Pages → your project → Settings → Bindings.",
+    models: [
+      { id: "@cf/meta/llama-3.1-8b-instruct", label: "Llama 3.1 8B (fast)" },
+      { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (smart)" },
+      { id: "@cf/mistral/mistral-7b-instruct-v0.1", label: "Mistral 7B" },
+    ],
+  },
+  {
     id: "anthropic",
     name: "Anthropic Claude",
     url: "https://console.anthropic.com",
@@ -88,7 +98,8 @@ export default function AISettings() {
   }, []);
 
   const selectedProvider = PROVIDERS.find((p) => p.id === activeProvider);
-  const needsKey = activeProvider !== "none";
+  const needsKey = activeProvider !== "none" && activeProvider !== "cloudflare-ai";
+  const isCloudflareAI = activeProvider === "cloudflare-ai";
 
   const handleProviderChange = (id: ProviderId) => {
     setActiveProvider(id);
@@ -111,16 +122,15 @@ export default function AISettings() {
     setStatus("saving");
     try {
       const isMasked = /^•+$/.test(apiKey);
+      const providerConfig = activeProvider === "none" ? {} : {
+        [activeProvider]: activeProvider === "cloudflare-ai"
+          ? { enabled: true, defaultModel: model }
+          : { enabled: true, defaultModel: model, apiKey: isMasked ? undefined : apiKey },
+      };
       const body = {
         activeProvider,
         systemContext,
-        providers: activeProvider === "none" ? {} : {
-          [activeProvider]: {
-            enabled: true,
-            defaultModel: model,
-            apiKey: isMasked ? undefined : apiKey,
-          },
-        },
+        providers: providerConfig,
       };
       const res = await fetch("/api/ai/settings", {
         method: "PUT",
@@ -211,6 +221,54 @@ export default function AISettings() {
             </label>
           ))}
         </div>
+
+        {/* Workers AI info note */}
+        {isCloudflareAI && (
+          <div style={{ borderTop: "1px solid #f0f0f1", paddingTop: 20 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: "#646970", lineHeight: 1.6 }}>
+              {(selectedProvider as any)?.note}
+            </p>
+            {selectedProvider && "models" in selectedProvider && selectedProvider.models.length > 0 && (
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#1d2327" }}>
+                  Model
+                </label>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{
+                    width: "100%", height: 34, padding: "0 8px",
+                    border: "1px solid #8c8f94", borderRadius: 3,
+                    fontSize: 13, fontFamily: "inherit", background: "#fff",
+                    outline: "none",
+                  }}
+                >
+                  {selectedProvider.models.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={testConnection}
+              disabled={testStatus === "testing"}
+              style={{
+                marginTop: 14, height: 34, padding: "0 14px",
+                background: "#fff", border: "1px solid #dcdcde",
+                borderRadius: 3, fontSize: 12, color: "#3c434a",
+                cursor: testStatus === "testing" ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {testStatus === "testing" ? "Testing…" : "Test connection"}
+            </button>
+            {testMessage && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: testStatus === "ok" ? "#00a32a" : "#d63638" }}>
+                {testMessage}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Model + API key — shown only when a provider is selected */}
         {needsKey && (
