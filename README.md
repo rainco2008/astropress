@@ -21,6 +21,7 @@ No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and your choice
 
 AstroPress is a modern CMS that speaks WordPress — same `wp_*` database schema, same mental model — but runs on the edge with zero PHP. Developers get the extensibility of WordPress; users get a fast, cheap, globally-distributed site.
 
+
 **Key features:**
 - WordPress-compatible `wp_*` schema (Drizzle ORM + SQLite/D1)
 - Visual block-based page and theme editor (full-screen ThemeEditor)
