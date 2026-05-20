@@ -108,30 +108,36 @@ Clicking the button will:
 git clone https://github.com/<your-username>/astropress
 cd astropress
 
-# 2. Create a D1 database and R2 bucket
+# 2. Create a D1 database and R2 bucket (run from apps/admin)
+cd apps/admin
 npx wrangler d1 create astropress
 npx wrangler r2 bucket create astropress-media
 
-# 3. Paste the database_id into wrangler.toml
+# 3. Paste the database_id into apps/admin/wrangler.toml
 #    [[d1_databases]] database_id = "paste-here"
 
 # 4. Run migrations against production D1
-npx wrangler d1 execute astropress --remote --file=./migrations/0001_init.sql
+npx wrangler d1 execute astropress --remote --file=../../migrations/0001_init.sql
 
-# 5. Push — Cloudflare Pages deploys automatically
+# 5. Push from repo root — Cloudflare Pages deploys automatically
+cd ../..
 git push
 ```
+
+> Wrangler must be run from `apps/admin/` (not the monorepo root) because this is a pnpm workspace.
 
 ### Manual CLI deploy
 
 ```bash
+cd apps/admin
 npx wrangler d1 create astropress
 npx wrangler r2 bucket create astropress-media
 npx wrangler pages project create astropress
 
 # Build and deploy
-pnpm build --filter @astropress/admin
-npx wrangler pages deploy apps/admin/dist
+cd ../..
+ASTRO_ADAPTER=cloudflare pnpm build --filter @astropress/admin
+cd apps/admin && npx wrangler pages deploy dist
 ```
 
 ---
