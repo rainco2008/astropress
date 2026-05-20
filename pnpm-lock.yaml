@@ -41,6 +41,9 @@ importers:
       '@astropress/plugin-seo':
         specifier: workspace:*
         version: link:../../plugins/seo
+      '@astropress/theme-default':
+        specifier: workspace:*
+        version: link:../../themes/default
       '@astropress/ui':
         specifier: workspace:*
         version: link:../../packages/ui
