@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "build:cf": "ASTRO_ADAPTER=cloudflare astro build",
+    "deploy:cf": "ASTRO_ADAPTER=cloudflare astro build && wrangler deploy",
     "preview": "astro preview",
     "typecheck": "astro check"
   },
@@ -31,6 +33,7 @@
     "@cloudflare/workers-types": "^4.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "wrangler": "^3.0.0"
   }
 }
