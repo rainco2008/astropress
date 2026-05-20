@@ -96,36 +96,20 @@ Visit http://localhost:4321 — the **setup wizard** runs on first boot to creat
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
 
-Clicking the button will:
+**No CLI or terminal needed.** After clicking the button:
 
-1. Fork this repo to your GitHub account
-2. Create a Cloudflare Pages project linked to the fork
-3. Set up CI/CD — every push to `main` triggers a build and deploy
+1. Authorize GitHub + Cloudflare when prompted
+2. Cloudflare forks the repo and creates a Pages project automatically
+3. In the Cloudflare dashboard, configure the build settings:
+   - **Root directory:** `apps/admin`
+   - **Build command:** `ASTRO_ADAPTER=cloudflare pnpm build`
+   - **Build output directory:** `dist`
+   - **Deploy command:** *(leave empty)*
+4. Go to **Settings → Functions → D1 database bindings**:
+   - Click **Add binding** → Variable name: `DB` → Create a new D1 database named `astropress`
+5. Save and trigger a new deployment
 
-**After the fork is created:**
-
-```bash
-# 1. Clone your fork
-git clone https://github.com/<your-username>/astropress
-cd astropress
-
-# 2. Create a D1 database and R2 bucket (run from apps/admin)
-cd apps/admin
-npx wrangler d1 create astropress
-npx wrangler r2 bucket create astropress-media
-
-# 3. Paste the database_id into apps/admin/wrangler.toml
-#    [[d1_databases]] database_id = "paste-here"
-
-# 4. Run migrations against production D1
-npx wrangler d1 execute astropress --remote --file=../../migrations/0001_init.sql
-
-# 5. Push from repo root — Cloudflare Pages deploys automatically
-cd ../..
-git push
-```
-
-> Wrangler must be run from `apps/admin/` (not the monorepo root) because this is a pnpm workspace.
+That's it. On first visit, AstroPress automatically creates all database tables and redirects you to the setup wizard to create your admin account.
 
 ### Manual CLI deploy
 
@@ -136,9 +120,8 @@ npx wrangler r2 bucket create astropress-media
 npx wrangler pages project create astropress
 
 # Build and deploy
-cd ../..
-ASTRO_ADAPTER=cloudflare pnpm build --filter @astropress/admin
-cd apps/admin && npx wrangler pages deploy dist
+ASTRO_ADAPTER=cloudflare pnpm build
+npx wrangler pages deploy dist
 ```
 
 ---
@@ -176,7 +159,7 @@ cp .env.example .env     # edit AUTH_SECRET
 docker compose up
 ```
 
-Open http://localhost:4321 — setup wizard runs on first boot.
+Open http://localhost:4321 — database tables are created automatically on first boot, then the setup wizard runs to create your admin account.
 
 ### Build image manually
 
