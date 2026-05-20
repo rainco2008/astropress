@@ -16,7 +16,7 @@ directory = "./apps/admin/dist"
 not_found_handling = "404-page"
 
 [build]
-command = "ASTRO_ADAPTER=cloudflare pnpm --filter @astropress/admin build"
+command = "pnpm --filter @astropress/admin run deploy:cf"
 
 [[d1_databases]]
 binding = "DB"

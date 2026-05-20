@@ -10,7 +10,7 @@ directory = "./dist"
 not_found_handling = "404-page"
 
 [build]
-command = "pnpm deploy:cf"
+command = "pnpm --filter @astropress/admin run deploy:cf"
 
 [observability]
 enabled = true
