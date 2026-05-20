@@ -105,7 +105,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   await loadCustomTypes(db);
 
   // Check setup completion (skip on setup routes)
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  // Any route outside /admin and /api is a public web route (no auth required)
+  const isPublicWebRoute = !pathname.startsWith("/admin") && !pathname.startsWith("/api");
+  const isPublic = isPublicWebRoute
+    || PUBLIC_PATHS.some((p) => pathname.startsWith(p))
     || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
     || isPublicFormApi(pathname, context.request.method);
 

@@ -1,10 +1,8 @@
-# Cloudflare Pages config for astropress-admin
-# This file is read from the repo root by Cloudflare Pages Git integration.
-#
-# Web app (astropress-web) is a separate Pages project — configure it in the
-# Cloudflare dashboard with the settings in apps/web/wrangler.toml.
+# Cloudflare Pages config for AstroPress
+# Single deployment — admin + public frontend served from one Pages project.
+# Deploy via: npx wrangler pages deploy apps/admin/dist
 
-name = "astropress-admin"
+name = "astropress"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "apps/admin/dist"
@@ -19,4 +17,4 @@ binding = "R2"
 bucket_name = "astropress-media"
 
 [vars]
-SITE_URL = "https://your-admin.pages.dev"
+# No SITE_URL needed — admin and public frontend are the same origin.

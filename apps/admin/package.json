@@ -15,6 +15,7 @@
     "@astropress/api": "workspace:*",
     "@astropress/auth": "workspace:*",
     "@astropress/core": "workspace:*",
+    "@astropress/theme-default": "workspace:*",
     "@astropress/plugin-seo": "workspace:*",
     "@astropress/ui": "workspace:*",
     "@libsql/client": "^0.14.0",
