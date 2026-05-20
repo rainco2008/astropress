@@ -1,48 +1,15 @@
 version: "3.9"
 
 services:
-  admin:
+  astropress:
     build:
       context: .
-      target: admin
+      target: runner
     ports:
       - "4321:4321"
     environment:
       DATABASE_URL: ${DATABASE_URL:-file:./data/astropress.db}
-      AUTH_SECRET: ${AUTH_SECRET}
-      SITE_URL: ${SITE_URL:-http://localhost:4322}
+      AUTH_SECRET: ${AUTH_SECRET:-changeme-use-a-long-random-string}
     volumes:
       - ./data:/app/data
-    depends_on:
-      - postgres
     restart: unless-stopped
-
-  web:
-    build:
-      context: .
-      target: web
-    ports:
-      - "4322:4322"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-file:./data/astropress.db}
-      SITE_URL: ${SITE_URL:-http://localhost:4322}
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: astropress
-      POSTGRES_USER: astropress
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-astropress}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-volumes:
-  postgres_data:

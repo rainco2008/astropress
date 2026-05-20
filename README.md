@@ -1,10 +1,19 @@
 # AstroPress
 
-A fully open-source, WordPress-compatible CMS built on Astro — deployable to Cloudflare in one command.
+A fully open-source, WordPress-compatible CMS built on Astro — admin and public frontend in a single deployment.
 
-No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and Cloudflare's infrastructure.
+No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and your choice of hosting.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
+---
+
+## Deploy
+
+| Platform | One-click |
+|----------|-----------|
+| Cloudflare Pages | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress) |
+| Railway | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/astropress) |
+| Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/awsmin/AstroPress) |
+| Docker | `docker compose up` — see [Docker](#docker) below |
 
 ---
 
@@ -12,60 +21,35 @@ No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and Cloudflare'
 
 AstroPress is a modern CMS that speaks WordPress — same `wp_*` database schema, same mental model — but runs on the edge with zero PHP. Developers get the extensibility of WordPress; users get a fast, cheap, globally-distributed site.
 
+
 **Key features:**
 - WordPress-compatible `wp_*` schema (Drizzle ORM + SQLite/D1)
-- Gutenberg block editor embedded in the admin (`@wordpress/block-editor` React island)
+- Visual block-based page and theme editor (full-screen ThemeEditor)
+- Gutenberg block editor for posts and classic content
 - Custom post types, taxonomies, custom fields (ACF-style) — all managed via UI
 - WPForms-style form builder with entries, conditional logic, multi-page
 - Navigation menus with drag-and-drop reorder and submenu nesting
-- Plugin system — drop a package in `/plugins`, register it in `apps/admin/src/plugins.ts`
+- Plugin system — drop a package in `/plugins`, register in `apps/admin/src/plugins.ts`
+- Single installation — admin (`/admin/*`) and public frontend (`/*`) in one app
 - Cloudflare-native: D1 database + R2 object storage + Pages hosting
 - Session-based auth (Lucia v3)
 
 ---
 
-## Monorepo Structure
+## Architecture
+
+AstroPress runs as a **single Astro SSR app** that serves both the admin dashboard and the public-facing website:
 
 ```
-astropress/
-├── apps/
-│   ├── admin/              # Astro SSR — CMS dashboard (port 4321)
-│   │   ├── src/
-│   │   │   ├── islands/    # React islands (BlockEditor, FormBuilder, etc.)
-│   │   │   ├── layouts/    # AdminLayout.astro
-│   │   │   ├── lib/        # icons.ts, media.ts, posts.ts, slugify.ts
-│   │   │   ├── middleware.ts
-│   │   │   ├── pages/
-│   │   │   │   ├── admin/  # Dashboard, Posts, Pages, Forms, Menus, Settings …
-│   │   │   │   └── api/    # REST endpoints
-│   │   │   └── plugins.ts  # Plugin bootstrap
-│   └── web/                # Astro SSR — public front-end (port 4322)
-│       └── src/
-│           ├── lib/        # query.ts (re-exported from core), formRenderer.ts
-│           ├── layouts/    # BaseLayout.astro
-│           └── pages/      # [slug].astro, blog/[slug].astro, index.astro …
-├── packages/
-│   ├── core/               # Drizzle schema, registry, query helpers, types
-│   │   └── src/
-│   │       ├── query.ts    # WordPress-style data helpers (queryPosts, getField …)
-│   │       ├── registry/   # Post type & taxonomy registry
-│   │       ├── schema/     # wp_posts, wp_options, wp_terms, wp_users …
-│   │       └── db.ts
-│   ├── auth/               # Lucia v3 session auth
-│   ├── api/                # Hono router foundation
-│   └── ui/                 # Shared React components
-├── plugins/
-│   └── seo/                # First-party SEO plugin
-├── themes/
-│   └── default/            # Default front-end theme
-├── docs/
-│   ├── plugin-api.md
-│   ├── theme-api.md
-│   └── deployment.md
-├── pnpm-workspace.yaml
-├── turbo.json
-└── wrangler.toml
+/              → public homepage (blog list or static front page)
+/blog/[slug]   → blog post
+/[slug]        → page (supports visual block editor)
+/forms/[id]    → standalone form page
+/admin/*       → CMS dashboard (auth required)
+/api/*         → REST API (most endpoints require auth)
 ```
+
+Everything shares one database. No separate frontend deployment needed.
 
 ---
 
@@ -91,25 +75,150 @@ pnpm db:setup        # runs migrations against local.db
 pnpm db:seed         # optional: seeds demo content
 ```
 
-### 3. Start dev servers
+### 3. Start dev server
 
 ```bash
 pnpm dev
 ```
 
-| App | URL |
-|-----|-----|
-| Admin | http://localhost:4321 |
-| Public site | http://localhost:4322 |
+| URL | Description |
+|-----|-------------|
+| http://localhost:4321 | Admin + public site |
+| http://localhost:4321/admin | CMS dashboard |
 
 Visit http://localhost:4321 — the **setup wizard** runs on first boot to create your admin account.
 
-### Restart a single app
+---
+
+## Deploy to Cloudflare Pages
+
+### One-click deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
+
+**No CLI or terminal needed.** After clicking the button:
+
+1. Authorize GitHub + Cloudflare when prompted
+2. Cloudflare forks the repo and creates a Pages project automatically
+3. In the Cloudflare dashboard, configure the build settings:
+   - **Root directory:** `apps/admin`
+   - **Build command:** `ASTRO_ADAPTER=cloudflare pnpm build`
+   - **Build output directory:** `dist`
+   - **Deploy command:** *(leave empty)*
+4. Go to **Settings → Functions → D1 database bindings**:
+   - Click **Add binding** → Variable name: `DB` → Create a new D1 database named `astropress`
+5. Save and trigger a new deployment
+
+That's it. On first visit, AstroPress automatically creates all database tables and redirects you to the setup wizard to create your admin account.
+
+### Manual CLI deploy
 
 ```bash
-# Kill port and restart
-lsof -ti :4321 | xargs kill -9
-cd apps/admin && pnpm dev
+cd apps/admin
+npx wrangler d1 create astropress
+npx wrangler r2 bucket create astropress-media
+npx wrangler pages project create astropress
+
+# Build and deploy
+ASTRO_ADAPTER=cloudflare pnpm build
+npx wrangler pages deploy dist
+```
+
+---
+
+## Deploy to Railway
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/astropress)
+
+Or manually:
+
+1. Push the repo to GitHub
+2. Create a new Railway project → **Deploy from GitHub repo**
+3. Set environment variables in the Railway dashboard:
+   - `DATABASE_URL` — e.g. `file:./data/astropress.db` (Railway persistent volume) or a PostgreSQL URL
+   - `AUTH_SECRET` — a random 32+ character string
+
+Railway auto-detects `railway.toml` and builds with Docker.
+
+---
+
+## Deploy to Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/awsmin/AstroPress)
+
+Render reads `render.yaml` automatically. Set `DATABASE_URL` in the Render dashboard after the first deploy. A 1 GB persistent disk is attached at `/app/data` for the SQLite database.
+
+---
+
+## Docker
+
+### Quick start
+
+```bash
+cp .env.example .env     # edit AUTH_SECRET
+docker compose up
+```
+
+Open http://localhost:4321 — database tables are created automatically on first boot, then the setup wizard runs to create your admin account.
+
+### Build image manually
+
+```bash
+docker build -t astropress .
+docker run -p 4321:4321 \
+  -e DATABASE_URL=file:./data/astropress.db \
+  -e AUTH_SECRET=your-secret-here \
+  -v $(pwd)/data:/app/data \
+  astropress
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | SQLite: `file:./data/astropress.db` · PostgreSQL: `postgres://...` |
+| `AUTH_SECRET` | 32+ char string for session signing |
+
+On **Cloudflare Pages**, the D1 database is bound automatically via `wrangler.toml` — no `DATABASE_URL` needed.
+
+---
+
+## Monorepo Structure
+
+```
+astropress/
+├── apps/
+│   └── admin/              # Single Astro SSR app (admin + public frontend)
+│       └── src/
+│           ├── components/ # BlockRenderer.astro
+│           ├── islands/    # React islands (BlockEditor, FormBuilder, ThemeEditor …)
+│           ├── layouts/    # AdminLayout.astro, BaseLayout.astro
+│           ├── lib/        # icons.ts, posts.ts, public-query.ts, formRenderer.ts …
+│           ├── middleware.ts
+│           ├── pages/
+│           │   ├── index.astro          # public homepage
+│           │   ├── [slug].astro         # public pages
+│           │   ├── blog/[slug].astro    # blog posts
+│           │   ├── forms/[id].astro     # standalone form page
+│           │   ├── admin/               # CMS dashboard pages
+│           │   └── api/                 # REST endpoints
+│           └── plugins.ts
+├── packages/
+│   ├── core/               # Drizzle schema, registry, query helpers, types
+│   ├── auth/               # Lucia v3 session auth
+│   ├── api/                # Hono router foundation
+│   └── ui/                 # Shared React components
+├── plugins/
+│   └── seo/                # First-party SEO plugin
+├── themes/
+│   └── default/            # Default front-end theme styles
+├── Dockerfile
+├── docker-compose.yml
+├── railway.toml
+├── render.yaml
+└── wrangler.toml
 ```
 
 ---
@@ -143,50 +252,18 @@ const site = await getSiteInfo(db);
 ---
 ```
 
-Full API reference:
-
 | Function | WP equivalent |
 |---|---|
 | `queryPosts(db, args)` | `WP_Query` |
 | `getPost(db, idOrSlug, type?)` | `get_post()` |
 | `getPostById(db, id)` | `get_post()` |
 | `getPostBySlug(db, slug, type?)` | `get_page_by_path()` |
-| `getChildren(db, parentId)` | `get_children()` |
-| `getAncestors(db, postId)` | parent chain, root-first |
 | `getField(db, postId, key)` | ACF `get_field()` |
-| `theField(db, postId, key)` | ACF `the_field()` — never null |
 | `getFields(db, postId)` | all meta as `Record<string,string>` |
-| `updatePostMeta(db, id, key, val)` | `update_post_meta()` |
 | `getTerms(db, taxonomy, args?)` | `get_terms()` |
 | `getPostTerms(db, postId, taxonomy)` | `get_the_terms()` |
-| `getPostsByTerm(db, slug, taxonomy)` | `WP_Query` with `tax_query` |
 | `getOption(db, name, fallback?)` | `get_option()` |
-| `updateOption(db, name, value)` | `update_option()` |
 | `getSiteInfo(db)` | `get_bloginfo()` |
-| `getAuthor(db, userId)` | `get_userdata()` |
-
-WP-cased aliases (`get_field`, `wp_query`, `the_field`, etc.) are also exported.
-
----
-
-## Icon Pack
-
-All admin UI icons live in `apps/admin/src/lib/icons.ts` and are importable by any admin page or island:
-
-```ts
-import { adminIcons, getIcon, ICON_NAMES } from "../lib/icons";
-
-// In Astro templates
-<Fragment set:html={adminIcons.dashboard} />
-<Fragment set:html={getIcon(postType.config.icon)} />
-
-// For a picker (post type editor)
-ICON_NAMES.forEach(name => adminIcons[name])
-```
-
-Icons: `dashboard`, `post`, `page`, `folder`, `forms`, `fields`, `posttypes`, `taxonomies`, `plugins`, `menus`, `settings`, `user`, `bolt`, `logout`, plus 40+ content-type icons (`book`, `image`, `video`, `music`, `camera`, `globe`, `calendar`, `star`, `chart`, `briefcase`, `users`, …).
-
-All icons are flat inline SVGs — 24×24 viewBox, `stroke="currentColor"`, stroke-width 1.75, round caps.
 
 ---
 
@@ -221,111 +298,6 @@ export default definePlugin({
 import myPlugin from "@astropress/my-plugin";
 loadPlugin(myPlugin);
 ```
-
----
-
-## Custom Fields (ACF-style)
-
-Custom field groups are created in the admin under **Structure → Custom Fields**. Each group has:
-- Location rules (attach to post type, taxonomy, etc.)
-- Field types: text, textarea, number, select, checkbox, radio, image, file, wysiwyg, repeater, group, flexible content, and more
-- Conditional logic per field
-
-Read values with `getField(db, postId, "field_name")` or the `get_field` alias.
-
----
-
-## Forms
-
-Forms are built in the admin under **Forms** using the drag-and-drop form builder. Embed on any page/post by adding the `astropress/form` block in the Gutenberg editor and selecting the form. The block renders server-side — no iframe, no JavaScript required for basic display.
-
-Form entries are viewable in **Forms → Entries**.
-
----
-
-## Deploy to Cloudflare
-
-### One-click deploy
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
-
-Clicking the button will:
-
-1. Fork this repo to your GitHub account
-2. Create a Cloudflare Pages project linked to the fork
-3. Prompt you to authorise Cloudflare to access your GitHub account
-4. Set up the CI/CD pipeline — every push to `main` triggers a build and deploy
-
-**What you need before clicking:**
-- A [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
-- A GitHub account
-
-**After the fork is created**, finish the setup in two minutes:
-
-```bash
-# 1. Clone your fork
-git clone https://github.com/<your-username>/astropress
-cd astropress
-
-# 2. Create a D1 database and R2 bucket
-npx wrangler d1 create astropress
-npx wrangler r2 bucket create astropress-media
-
-# 3. Paste the database_id into both wrangler configs
-#    apps/admin/wrangler.toml  →  [[d1_databases]] database_id = "..."
-#    apps/web/wrangler.toml    →  [[d1_databases]] database_id = "..."
-
-# 4. Run migrations against production D1
-npx wrangler d1 execute astropress --remote --file=./migrations/0001_init.sql
-
-# 5. Push — GitHub Actions deploys both apps automatically
-git push
-```
-
-Your admin will be live at the Cloudflare Pages URL shown in the dashboard.
-
----
-
-### Manual deploy (CLI only)
-
-If you prefer not to use the button:
-
-#### 1. Create Cloudflare resources
-
-```bash
-npx wrangler d1 create astropress
-npx wrangler r2 bucket create astropress-media
-npx wrangler pages project create astropress-admin
-npx wrangler pages project create astropress-web
-```
-
-#### 2. Update wrangler configs
-
-In `apps/admin/wrangler.toml` and `apps/web/wrangler.toml`:
-- Replace `database_id` with your D1 database ID
-- Set `SITE_URL` to your Pages URL
-
-#### 3. Add GitHub secrets
-
-| Secret | Value |
-|--------|-------|
-| `CLOUDFLARE_API_TOKEN` | API token with Pages + D1 + R2 permissions |
-| `CF_ACCOUNT_ID` | Your Cloudflare account ID |
-
-#### 4. Push to `main`
-
-GitHub Actions builds both apps, runs D1 migrations, and deploys to Cloudflare Pages automatically.
-
----
-
-## Environment Variables
-
-| Variable | Used in | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | Both apps (dev) | SQLite URL, e.g. `file:./local.db` |
-| `AUTH_SECRET` | Admin | 32+ char string for session signing |
-| `SITE_URL` | Admin | Full public URL of the web app |
-| `R2_BUCKET` | Admin | R2 bucket name for media uploads |
 
 ---
 

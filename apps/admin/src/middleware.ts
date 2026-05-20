@@ -5,6 +5,7 @@ import { wpOptions } from "@astropress/core/schema";
 import { eq } from "drizzle-orm";
 import { bootstrapPlugins } from "./plugins";
 import { registerPostType, registerTaxonomy, getPostType, getTaxonomy, registerFieldGroup, getFieldGroup } from "@astropress/core/registry";
+import { autoMigrate } from "./lib/autoMigrate";
 
 // Ensure Lucia module augmentation is in scope
 type _AuthRef = Auth;
@@ -102,10 +103,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db: any = d1 ? createD1Database(d1) : await getLocalDb();
   context.locals.db = db;
+  await autoMigrate(db);
   await loadCustomTypes(db);
 
   // Check setup completion (skip on setup routes)
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  // Any route outside /admin and /api is a public web route (no auth required)
+  const isPublicWebRoute = !pathname.startsWith("/admin") && !pathname.startsWith("/api");
+  const isPublic = isPublicWebRoute
+    || PUBLIC_PATHS.some((p) => pathname.startsWith(p))
     || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
     || isPublicFormApi(pathname, context.request.method);
 
