@@ -149,7 +149,7 @@ ${forms.map(f => `- formId: "${f.id}", formTitle: "${f.title}"`).join("\n")}`;
     let raw: string;
 
     if (provider === "cloudflare-ai") {
-      raw = await callCloudflareAI(cfAI, cfg?.defaultModel ?? "@cf/meta/llama-3.1-8b-instruct", fullSystemPrompt, messages);
+      raw = await callCloudflareAI(cfAI, cfg?.defaultModel ?? "@cf/meta/llama-3.3-70b-instruct-fp8-fast", fullSystemPrompt, messages);
     } else if (provider === "anthropic") {
       raw = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", fullSystemPrompt, messages);
     } else if (provider === "openai") {
@@ -240,6 +240,7 @@ interface Msg { role: "user" | "assistant"; content: string; }
 async function callCloudflareAI(ai: any, model: string, system: string, messages: Msg[]): Promise<string> {
   if (!ai) throw new Error("Cloudflare Workers AI binding not available. Add an AI binding named \"AI\" in the Cloudflare dashboard under Workers & Pages → your project → Settings → Bindings.");
   const result = await ai.run(model, {
+    max_tokens: 4096,
     messages: [
       { role: "system", content: system },
       ...messages.map((m) => ({ role: m.role, content: m.content })),

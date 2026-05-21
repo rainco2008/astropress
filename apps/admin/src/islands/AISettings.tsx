@@ -11,8 +11,8 @@ const PROVIDERS = [
     name: "Cloudflare Workers AI (no API key needed)",
     note: "Uses the AI binding from your Cloudflare dashboard. Add an AI binding named \"AI\" in Workers & Pages → your project → Settings → Bindings.",
     models: [
-      { id: "@cf/meta/llama-3.1-8b-instruct", label: "Llama 3.1 8B (fast)" },
-      { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (smart)" },
+      { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (recommended)" },
+      { id: "@cf/meta/llama-3.1-8b-instruct", label: "Llama 3.1 8B (faster)" },
       { id: "@cf/mistral/mistral-7b-instruct-v0.1", label: "Mistral 7B" },
     ],
   },

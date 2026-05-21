@@ -59,7 +59,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     let reply: string;
 
     if (provider === "cloudflare-ai") {
-      reply = await callCloudflareAI(cfAI, cfg?.defaultModel ?? "@cf/meta/llama-3.1-8b-instruct", system, messages);
+      reply = await callCloudflareAI(cfAI, cfg?.defaultModel ?? "@cf/meta/llama-3.3-70b-instruct-fp8-fast", system, messages);
     } else if (provider === "anthropic") {
       reply = await callAnthropic(cfg.apiKey, cfg.defaultModel ?? "claude-sonnet-4-6", system, messages);
     } else if (provider === "openai") {
@@ -116,11 +116,12 @@ ${contextStr || "(none)"}
 ## Behaviour Rules
 1. When the user asks you to do something, DO IT — emit the correct action block(s) immediately.
 2. Never say "you can", "you should", "click", "go to", "navigate to", or give manual instructions.
-3. Keep your reply to one short sentence confirming what you did (e.g. "Created Job Application post type with Job Type and Location taxonomies.").
-4. For multi-step tasks emit ALL action blocks in one response — actions execute sequentially in the order you emit them.
+3. Keep your reply to ONE short sentence confirming what you did. Do NOT write multiple confirmation sentences. Do NOT narrate each step separately.
+4. For multi-step tasks emit ALL action blocks in one response — actions execute sequentially. ONE reply sentence + all action blocks. Never split into multiple replies.
 5. Write complete, high-quality content — never placeholders.
 6. Use **server-side actions** for create/update/delete operations — they work from any page.
 7. Use **client-side actions** only when already on the relevant editor page.
+8. NEVER emit duplicate or redundant actions. Each thing should be done ONCE. Do not setContent multiple times for the same request.
 
 ## Action Ordering & Dependencies
 - **Always order by dependency**: if action B depends on action A (e.g. a taxonomy references a post type), emit A first.
@@ -197,6 +198,7 @@ User: "publish this post" (on editor page)
 async function callCloudflareAI(ai: any, model: string, system: string, messages: ChatMessage[]): Promise<string> {
   if (!ai) throw new Error("Cloudflare Workers AI binding not available. Add an AI binding named \"AI\" in the Cloudflare dashboard under Workers & Pages → your project → Settings → Bindings.");
   const result = await ai.run(model, {
+    max_tokens: 4096,
     messages: [
       { role: "system", content: system },
       ...messages.map((m) => ({ role: m.role, content: m.content })),

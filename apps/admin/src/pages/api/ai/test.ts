@@ -34,7 +34,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (provider === "cloudflare-ai") {
       const ai = (locals as any).runtime?.env?.AI;
       if (!ai) throw new Error("Cloudflare Workers AI binding (AI) not found. Add the AI binding in your Cloudflare dashboard under Settings → Bindings.");
-      const result = await ai.run(model ?? "@cf/meta/llama-3.1-8b-instruct", {
+      const result = await ai.run(model ?? "@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+        max_tokens: 32,
         messages: [{ role: "system", content: system }, ...testMessages],
       }) as any;
       reply = result.response ?? result.text ?? "OK";
