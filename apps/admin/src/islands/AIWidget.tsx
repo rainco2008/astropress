@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface Message {
   role: "user" | "assistant";
@@ -149,6 +149,38 @@ const CloseIcon = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+
+// ─── Simple markdown renderer ─────────────────────────────────────────────────
+
+function renderMarkdown(text: string): React.ReactNode[] {
+  // Split into lines, process each
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+
+  lines.forEach((line, li) => {
+    // Parse inline tokens: **bold**, *italic*, `code`
+    const parts: React.ReactNode[] = [];
+    const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+    let last = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(line)) !== null) {
+      if (match.index > last) parts.push(line.slice(last, match.index));
+      if (match[2] !== undefined) parts.push(<strong key={match.index}>{match[2]}</strong>);
+      else if (match[3] !== undefined) parts.push(<em key={match.index}>{match[3]}</em>);
+      else if (match[4] !== undefined) parts.push(
+        <code key={match.index} style={{ background: "#e8e8e8", padding: "1px 4px", borderRadius: 3, fontSize: "0.9em", fontFamily: "monospace" }}>{match[4]}</code>
+      );
+      last = match.index + match[0].length;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+
+    nodes.push(<span key={li}>{parts}</span>);
+    if (li < lines.length - 1) nodes.push(<br key={`br-${li}`} />);
+  });
+
+  return nodes;
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -493,9 +525,9 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
                     padding: "8px 12px",
                     borderRadius: "2px 12px 12px 12px",
                     fontSize: 13, lineHeight: 1.65, color: "#1d2327",
-                    whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    wordBreak: "break-word",
                   }}>
-                    {msg.content}
+                    {renderMarkdown(msg.content)}
                   </div>
                 )}
                 {msg.appliedActions && msg.appliedActions.length > 0 && (

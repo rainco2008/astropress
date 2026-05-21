@@ -96,20 +96,77 @@ Visit http://localhost:4321 — the **setup wizard** runs on first boot to creat
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
 
-**No CLI or terminal needed.** After clicking the button:
+**No CLI or terminal needed.** After clicking the button, follow the steps below.
 
-1. Authorize GitHub + Cloudflare when prompted
-2. Cloudflare forks the repo and creates a Pages project automatically
-3. In the Cloudflare dashboard, configure the build settings:
-   - **Root directory:** `apps/admin`
-   - **Build command:** `ASTRO_ADAPTER=cloudflare pnpm build`
-   - **Build output directory:** `dist`
-   - **Deploy command:** *(leave empty)*
-4. Go to **Settings → Functions → D1 database bindings**:
-   - Click **Add binding** → Variable name: `DB` → Create a new D1 database named `astropress`
-5. Save and trigger a new deployment
+---
 
-That's it. On first visit, AstroPress automatically creates all database tables and redirects you to the setup wizard to create your admin account.
+### Step-by-step setup
+
+#### 1. Connect your repo
+
+1. Click the deploy button above
+2. Authorize GitHub and Cloudflare when prompted
+3. Cloudflare forks the repo and creates a Pages project
+
+#### 2. Configure build settings
+
+In the Pages project → **Settings → Build & Deployments**:
+
+| Setting | Value |
+|---|---|
+| Root directory | `apps/admin` |
+| Build command | `ASTRO_ADAPTER=cloudflare pnpm build` |
+| Build output directory | `dist` |
+| Deploy command | *(leave empty)* |
+
+#### 3. Add bindings
+
+Go to **Settings → Functions** and add the following bindings. Create each resource in Cloudflare first if it doesn't exist yet.
+
+**D1 Database** (required — stores all CMS content)
+
+| Field | Value |
+|---|---|
+| Variable name | `DB` |
+| D1 database | Create a new database named `astropress` |
+
+**R2 Bucket** (required for media uploads)
+
+| Field | Value |
+|---|---|
+| Variable name | `R2` |
+| R2 bucket | Create a new bucket named `astropress-media` |
+
+**Workers AI** (optional — enables built-in AI with no external API key)
+
+| Field | Value |
+|---|---|
+| Variable name | `AI` |
+| Binding type | AI |
+
+> If you skip the AI binding, you can still use any external provider (Anthropic, OpenAI, Gemini, Mistral, Groq) by adding an API key in **Admin → Settings → AI**.
+
+#### 4. Deploy
+
+Save settings and trigger a new deployment. On first visit, AstroPress automatically creates all database tables and redirects you to the setup wizard to create your admin account.
+
+---
+
+### Enable Cloudflare Workers AI in the admin
+
+Once the `AI` binding is added:
+
+1. Go to **Admin → Settings → AI**
+2. Select **Cloudflare Workers AI (no API key needed)**
+3. Choose a model:
+   - **Llama 3.1 8B** — fast, great for most tasks
+   - **Llama 3.3 70B** — smarter, slower
+   - **Mistral 7B** — good alternative
+4. Click **Save Settings**
+
+The AI assistant, block generator, and chat widget will all use your Workers AI binding at no extra per-token cost beyond your Cloudflare plan.
+
+---
 
 ### Manual CLI deploy
 
@@ -123,6 +180,8 @@ npx wrangler pages project create astropress
 ASTRO_ADAPTER=cloudflare pnpm build
 npx wrangler pages deploy dist
 ```
+
+Add D1, R2, and AI bindings in the Cloudflare dashboard after the project is created (CLI does not set bindings for Pages projects).
 
 ---
 

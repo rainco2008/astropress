@@ -157,12 +157,15 @@ export default function AISettings() {
     setTestStatus("testing");
     setTestMessage("");
     try {
-      const res = await fetch("/api/ai/chat", {
+      const isMasked = /^•+$/.test(apiKey);
+      const res = await fetch("/api/ai/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [{ role: "user", content: "Reply with exactly: OK" }],
-          context: {},
+          provider: activeProvider,
+          model,
+          // Send actual key if user typed one; omit if masked (server uses saved key instead)
+          apiKey: isMasked ? undefined : (apiKey || undefined),
         }),
       });
       const data = await res.json() as any;
@@ -361,13 +364,13 @@ export default function AISettings() {
                 )}
                 <button
                   onClick={testConnection}
-                  disabled={testStatus === "testing" || (!hasStoredKey && !apiKey)}
+                  disabled={testStatus === "testing"}
                   style={{
                     height: 34, padding: "0 12px",
                     background: "#fff", border: "1px solid #dcdcde",
                     borderRadius: 3, fontSize: 12, color: "#3c434a",
                     cursor: testStatus === "testing" ? "not-allowed" : "pointer",
-                    fontFamily: "inherit", opacity: (!hasStoredKey && !apiKey) ? 0.5 : 1,
+                    fontFamily: "inherit",
                     whiteSpace: "nowrap",
                   }}
                 >
