@@ -72,6 +72,7 @@ export const PUT: APIRoute = async ({ locals, request }) => {
   const newSettings = {
     activeProvider: activeProvider ?? existingSettings.activeProvider,
     systemContext: systemContext !== undefined ? systemContext : (existingSettings.systemContext ?? ""),
+    confirmBeforeAction: body.confirmBeforeAction !== undefined ? body.confirmBeforeAction : (existingSettings.confirmBeforeAction ?? true),
     providers: mergedProviders,
   };
 

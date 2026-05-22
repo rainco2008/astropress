@@ -4,6 +4,13 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   appliedActions?: ActionChip[];
+  pending?: PendingExecution; // awaiting user confirmation
+}
+
+interface PendingExecution {
+  serverActions: Action[];
+  clientActions: Action[];
+  navigateAction: Action | null;
 }
 
 interface ActionChip {
@@ -51,6 +58,40 @@ function loadSession(): Session | null {
 
 // ─── Action execution ─────────────────────────────────────────────────────────
 
+// ─── AI update animation (Apple Intelligence style) ───────────────────────────
+
+function injectAIStyles() {
+  if (document.getElementById("ap-ai-styles")) return;
+  const s = document.createElement("style");
+  s.id = "ap-ai-styles";
+  s.textContent = `
+    @keyframes ap-ai-glow {
+      0%   { box-shadow: 0 0 0 2.5px rgba(99,102,241,0.95), 0 0 18px rgba(99,102,241,0.45), 0 0 40px rgba(168,85,247,0.25); }
+      35%  { box-shadow: 0 0 0 2.5px rgba(168,85,247,0.95), 0 0 22px rgba(168,85,247,0.50), 0 0 50px rgba(236,72,153,0.28); }
+      70%  { box-shadow: 0 0 0 2px  rgba(236,72,153,0.80), 0 0 16px rgba(236,72,153,0.35), 0 0 36px rgba(99,102,241,0.20); }
+      100% { box-shadow: 0 0 0 0    transparent; }
+    }
+    @keyframes ap-ai-glow-area {
+      0%   { outline: 2.5px solid rgba(99,102,241,0.85);  outline-offset: 3px; }
+      35%  { outline: 2.5px solid rgba(168,85,247,0.85);  outline-offset: 4px; }
+      70%  { outline: 2px   solid rgba(236,72,153,0.70);  outline-offset: 3px; }
+      100% { outline: 2px   solid transparent;             outline-offset: 2px; }
+    }
+    .ap-ai-flash       { animation: ap-ai-glow      1.8s ease-out forwards !important; border-radius: 4px; }
+    .ap-ai-flash-area  { animation: ap-ai-glow-area 1.8s ease-out forwards !important; border-radius: 4px; }
+  `;
+  document.head.appendChild(s);
+}
+
+function flashAIUpdate(el: Element, variant: "glow" | "area" = "glow") {
+  injectAIStyles();
+  const cls = variant === "area" ? "ap-ai-flash-area" : "ap-ai-flash";
+  el.classList.remove("ap-ai-flash", "ap-ai-flash-area");
+  void (el as HTMLElement).offsetWidth; // force reflow to restart animation
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 2000);
+}
+
 /** Execute a client-side DOM action. Returns label or null if not applicable. */
 function executeClientAction(action: Action, persistAndNavigate: (url: string, pending: Action[]) => void): string | null {
   switch (action.type) {
@@ -59,6 +100,7 @@ function executeClientAction(action: Action, persistAndNavigate: (url: string, p
       if (el) {
         el.value = action.value;
         el.dispatchEvent(new Event("input", { bubbles: true }));
+        flashAIUpdate(el);
         return `Title → "${action.value}"`;
       }
       return null;
@@ -67,12 +109,21 @@ function executeClientAction(action: Action, persistAndNavigate: (url: string, p
       const el = document.getElementById("post-excerpt") as HTMLTextAreaElement | null;
       if (el) {
         el.value = action.value;
+        flashAIUpdate(el);
         return "Excerpt updated";
       }
       return null;
     }
     case "setContent": {
       window.dispatchEvent(new CustomEvent("ap:setContent", { detail: { html: action.html } }));
+      // Flash the editor container after a short delay to let it render
+      setTimeout(() => {
+        const editor =
+          document.querySelector(".ap-wysiwyg-editor") ??
+          document.querySelector("[data-ap-editor]") ??
+          document.getElementById("post-content-editor");
+        if (editor) flashAIUpdate(editor, "area");
+      }, 150);
       return "Content updated";
     }
     case "setStatus": {
@@ -100,6 +151,29 @@ function executeClientAction(action: Action, persistAndNavigate: (url: string, p
 }
 
 
+
+// ─── Action humanizer ────────────────────────────────────────────────────────
+
+function humanizeAction(action: Action): string {
+  switch (action.type) {
+    case "createPost":       return `Create ${action.postType ?? "post"}: "${action.title ?? "Untitled"}"`;
+    case "updatePost":       return `Update post #${action.id}`;
+    case "deletePost":       return `Delete post #${action.id}`;
+    case "createPostType":   return `Register post type: ${action.name ?? action.key}`;
+    case "createTaxonomy":   return `Register taxonomy: ${action.name ?? action.key}`;
+    case "createForm":       return `Create form: "${action.name ?? "New Form"}"`;
+    case "updateForm":       return `Update form #${action.id}`;
+    case "createFieldGroup": return `Create field group: "${action.title ?? "New Group"}"`;
+    case "updateSettings":   return `Update site settings: ${Object.keys(action.settings ?? {}).join(", ")}`;
+    case "setTitle":         return `Set title: "${action.value}"`;
+    case "setContent":       return "Update post content";
+    case "setExcerpt":       return `Set excerpt`;
+    case "setStatus":        return `Set status: ${action.value}`;
+    case "savePost":         return "Save post";
+    case "navigate":         return `Navigate to ${action.url}`;
+    default:                 return action.type;
+  }
+}
 
 // ─── Quick prompts ────────────────────────────────────────────────────────────
 
@@ -192,6 +266,8 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
   const [liveChips, setLiveChips] = useState<ActionChip[]>([]);
   const [error, setError] = useState("");
   const [resumed, setResumed] = useState(false);
+  const [confirmBeforeAction, setConfirmBeforeAction] = useState(true);
+  const initialScrollDone = useRef(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -204,6 +280,14 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     : "default";
 
   const quickPrompts = QUICK_PROMPTS[pageType] ?? QUICK_PROMPTS.default;
+
+  // Load confirmation preference
+  useEffect(() => {
+    fetch("/api/ai/settings")
+      .then(r => r.json() as any)
+      .then(d => { setConfirmBeforeAction(d.confirmBeforeAction !== false); })
+      .catch(() => {});
+  }, []);
 
   // Restore session + execute pending actions
   useEffect(() => {
@@ -274,9 +358,12 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
-  // Scroll to bottom
+  // Scroll to bottom — instant on first open (session restore), smooth for new messages
   useEffect(() => {
-    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!open) return;
+    const behavior = initialScrollDone.current ? "smooth" : "instant";
+    bottomRef.current?.scrollIntoView({ behavior });
+    initialScrollDone.current = true;
   }, [open, messages]);
 
   // Focus input
@@ -299,6 +386,82 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     if (excerptEl?.value) ctx.postExcerpt = excerptEl.value.slice(0, 200);
     return ctx;
   }, [path, pageContext]);
+
+  // ── Shared action executor ────────────────────────────────────────────────
+  const executeActions = async (
+    serverActions: Action[],
+    clientActions: Action[],
+    navigateAction: Action | null,
+    nav: (url: string, pending: Action[]) => void,
+  ): Promise<ActionChip[]> => {
+    const chips: ActionChip[] = [];
+    let navigateTo: string | null = null;
+
+    for (const action of serverActions) {
+      try {
+        const r = await fetch("/api/ai/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const d = await r.json() as any;
+        const result = d.results?.[0] ?? { success: false, message: "No result" };
+        chips.push({ label: result.message, ok: result.success });
+        setLiveChips([...chips]);
+        if (result.navigate) navigateTo = result.navigate;
+      } catch (e: any) {
+        chips.push({ label: e.message ?? "Action failed", ok: false });
+        setLiveChips([...chips]);
+      }
+    }
+
+    const finalNav = navigateTo ?? navigateAction?.url ?? null;
+    if (finalNav) {
+      nav(finalNav, clientActions);
+      chips.push({ label: `Opening ${finalNav}…`, ok: true });
+    } else {
+      for (const action of clientActions) {
+        const label = executeClientAction(action, nav);
+        if (label) chips.push({ label, ok: true });
+      }
+    }
+
+    return chips;
+  };
+
+  // ── Approve pending actions ───────────────────────────────────────────────
+  const approveActions = useCallback(async (msgIndex: number) => {
+    setMessages(prev => {
+      const msg = prev[msgIndex];
+      if (!msg?.pending) return prev;
+      return prev.map((m, i) => i === msgIndex ? { ...m, pending: undefined } : m);
+    });
+
+    // Read the pending data before clearing
+    const msg = messages[msgIndex];
+    if (!msg?.pending) return;
+    const { serverActions, clientActions, navigateAction } = msg.pending;
+
+    setLoading(true);
+    setLiveChips([]);
+
+    const chips = await executeActions(serverActions, clientActions, navigateAction, persistAndNavigate);
+
+    setLiveChips([]);
+    setLoading(false);
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex ? { ...m, appliedActions: chips, pending: undefined } : m
+    ));
+  }, [messages, persistAndNavigate]);
+
+  // ── Cancel pending actions ────────────────────────────────────────────────
+  const cancelActions = useCallback((msgIndex: number) => {
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex
+        ? { ...m, pending: undefined, appliedActions: [{ label: "Cancelled", ok: false }] }
+        : m
+    ));
+  }, []);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -332,44 +495,21 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
 
       const serverActions = allActions.filter((a) => !CLIENT_SIDE.has(a.type));
       const clientActions = allActions.filter((a) => CLIENT_SIDE.has(a.type) && a.type !== "navigate");
-      const navigateAction = allActions.find((a) => a.type === "navigate");
+      const navigateAction = allActions.find((a) => a.type === "navigate") ?? null;
 
-      const chips: ActionChip[] = [];
-      let navigateTo: string | null = null;
+      const actionableCount = serverActions.length + clientActions.length + (navigateAction ? 1 : 0);
 
-      // ── Execute server actions one-by-one with live progress ──────────
-      for (const action of serverActions) {
-        try {
-          const r = await fetch("/api/ai/execute", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action }),
-          });
-          const d = await r.json() as any;
-          const result = d.results?.[0] ?? { success: false, message: "No result" };
-          const chip: ActionChip = { label: result.message, ok: result.success };
-          chips.push(chip);
-          setLiveChips([...chips]);                 // update UI after each step
-          if (result.navigate) navigateTo = result.navigate; // last navigate wins
-        } catch (e: any) {
-          const chip: ActionChip = { label: e.message ?? "Action failed", ok: false };
-          chips.push(chip);
-          setLiveChips([...chips]);
-        }
+      // ── Confirmation mode: show plan and wait for approval ────────────
+      if (confirmBeforeAction && actionableCount > 0) {
+        setMessages([
+          ...newMessages,
+          { role: "assistant", content: replyContent, pending: { serverActions, clientActions, navigateAction } },
+        ]);
+        return;
       }
 
-      // ── Navigate or run client-side DOM actions ───────────────────────
-      const finalNav = navigateTo ?? navigateAction?.url ?? null;
-      if (finalNav) {
-        persistAndNavigate(finalNav, clientActions);
-        chips.push({ label: `Opening ${finalNav}…`, ok: true });
-      } else {
-        for (const action of clientActions) {
-          const label = executeClientAction(action, persistAndNavigate);
-          if (label) chips.push({ label, ok: true });
-        }
-      }
-
+      // ── Execute immediately ───────────────────────────────────────────
+      const chips = await executeActions(serverActions, clientActions, navigateAction, persistAndNavigate);
       setLiveChips([]);
       setMessages([
         ...newMessages,
@@ -517,6 +657,12 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
               );
             }
 
+            const allPlanActions = [
+              ...(msg.pending?.serverActions ?? []),
+              ...(msg.pending?.clientActions ?? []),
+              ...(msg.pending?.navigateAction ? [msg.pending.navigateAction] : []),
+            ];
+
             return (
               <div key={i} style={{ alignSelf: "flex-start", maxWidth: "96%", display: "flex", flexDirection: "column", gap: 5 }}>
                 {msg.content && (
@@ -530,6 +676,60 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
                     {renderMarkdown(msg.content)}
                   </div>
                 )}
+
+                {/* Confirmation plan */}
+                {msg.pending && (
+                  <div style={{
+                    border: "1px solid #c3c4c7", borderRadius: 6,
+                    overflow: "hidden", background: "#fff",
+                    fontSize: 12,
+                  }}>
+                    <div style={{
+                      padding: "8px 12px", background: "#f6f7f7",
+                      borderBottom: "1px solid #e0e0e1",
+                      fontSize: 11, fontWeight: 600, color: "#646970",
+                      letterSpacing: "0.04em", textTransform: "uppercase",
+                    }}>
+                      Proposed changes — approve to apply
+                    </div>
+                    <ul style={{ margin: 0, padding: "8px 12px 8px 28px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {allPlanActions.map((a, ai) => (
+                        <li key={ai} style={{ color: "#1d2327", lineHeight: 1.5 }}>
+                          {humanizeAction(a)}
+                        </li>
+                      ))}
+                    </ul>
+                    <div style={{
+                      display: "flex", gap: 8, padding: "8px 12px 10px",
+                      borderTop: "1px solid #f0f0f1",
+                    }}>
+                      <button
+                        onClick={() => approveActions(i)}
+                        style={{
+                          height: 28, padding: "0 14px",
+                          background: "#00a32a", color: "#fff",
+                          border: "1px solid #007a1f", borderRadius: 3,
+                          fontSize: 12, fontWeight: 600,
+                          cursor: "pointer", fontFamily: "inherit",
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => cancelActions(i)}
+                        style={{
+                          height: 28, padding: "0 12px",
+                          background: "#fff", color: "#646970",
+                          border: "1px solid #dcdcde", borderRadius: 3,
+                          fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {msg.appliedActions && msg.appliedActions.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                     {msg.appliedActions.map((a, ai) => (

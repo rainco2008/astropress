@@ -74,6 +74,7 @@ export default function AISettings() {
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [editingKey, setEditingKey] = useState(false);
   const [systemContext, setSystemContext] = useState("");
+  const [confirmBeforeAction, setConfirmBeforeAction] = useState(true);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testMessage, setTestMessage] = useState("");
@@ -93,6 +94,7 @@ export default function AISettings() {
           }
         }
         setSystemContext(data.systemContext ?? "");
+        setConfirmBeforeAction(data.confirmBeforeAction !== false); // default true
       })
       .catch(() => {});
   }, []);
@@ -130,6 +132,7 @@ export default function AISettings() {
       const body = {
         activeProvider,
         systemContext,
+        confirmBeforeAction,
         providers: providerConfig,
       };
       const res = await fetch("/api/ai/settings", {
@@ -417,6 +420,54 @@ export default function AISettings() {
         <p style={{ margin: "8px 0 0", fontSize: 11, color: "#8c8f94" }}>
           This context is never shown to site visitors. It is sent to the AI provider on every request.
         </p>
+      </div>
+
+      {/* Behaviour */}
+      <div style={{
+        background: "#fff", border: "1px solid #c3c4c7",
+        borderRadius: 3, padding: "24px 28px", marginBottom: 20,
+      }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: "#1d2327" }}>
+          Behaviour
+        </h3>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#646970", lineHeight: 1.5 }}>
+          Control how the AI assistant handles actions that modify your site.
+        </p>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+          <div style={{ position: "relative", flexShrink: 0, marginTop: 2 }}>
+            <input
+              type="checkbox"
+              checked={confirmBeforeAction}
+              onChange={e => setConfirmBeforeAction(e.target.checked)}
+              style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+            />
+            <div
+              onClick={() => setConfirmBeforeAction(v => !v)}
+              style={{
+                width: 36, height: 20, borderRadius: 10, cursor: "pointer",
+                background: confirmBeforeAction ? "#2271b1" : "#c3c4c7",
+                transition: "background .15s",
+                position: "relative",
+              }}
+            >
+              <div style={{
+                position: "absolute", top: 2, borderRadius: "50%",
+                width: 16, height: 16, background: "#fff",
+                left: confirmBeforeAction ? 18 : 2,
+                transition: "left .15s",
+                boxShadow: "0 1px 3px rgba(0,0,0,.25)",
+              }} />
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1d2327", lineHeight: 1.4 }}>
+              Ask for confirmation before making changes
+            </div>
+            <div style={{ fontSize: 12, color: "#646970", marginTop: 3, lineHeight: 1.5 }}>
+              When enabled (default), the AI shows you a plan of what it will do and waits for your approval before executing any create, update, or delete actions. Turn off to let the AI act immediately.
+            </div>
+          </div>
+        </label>
       </div>
 
       {/* Save */}
