@@ -240,7 +240,7 @@ export const APF_SCRIPT = `
   }
   function collectVals(form){
     var v={};
-    form.querySelectorAll('input:not([type=radio]):not([type=checkbox])').forEach(function(el){if(el.name)v[el.name]=el.value;});
+    form.querySelectorAll('input:not([type=radio]):not([type=checkbox]),textarea,select').forEach(function(el){if(el.name)v[el.name]=el.value;});
     form.querySelectorAll('input[type=radio]:checked').forEach(function(el){v[el.name]=el.value;});
     var g={};form.querySelectorAll('input[type=checkbox][data-group]:checked').forEach(function(el){if(!g[el.dataset.group])g[el.dataset.group]=[];g[el.dataset.group].push(el.value);});
     Object.assign(v,g);

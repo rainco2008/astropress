@@ -7,7 +7,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
   const page = Number(url.searchParams.get("page") ?? "1");
   const search = url.searchParams.get("search") ?? undefined;
-  const { items, total } = await listMedia(db, { page, search });
+  const baseUrl = url.origin;
+  const { items, total } = await listMedia(db, { page, search, baseUrl });
 
   return new Response(JSON.stringify({ items, total }), {
     headers: { "Content-Type": "application/json" },

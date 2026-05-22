@@ -13,9 +13,9 @@ export interface MediaItem {
 
 export async function listMedia(
   db: Database,
-  opts: { page?: number; perPage?: number; search?: string } = {}
+  opts: { page?: number; perPage?: number; search?: string; baseUrl?: string } = {}
 ): Promise<{ items: MediaItem[]; total: number }> {
-  const { page = 1, perPage = 40, search } = opts;
+  const { page = 1, perPage = 40, search, baseUrl } = opts;
   const offset = (page - 1) * perPage;
 
   const { and, like } = await import("drizzle-orm");
@@ -54,10 +54,7 @@ export async function listMedia(
     }
   }
 
-  // Media files are served from the admin app's public/media directory.
-  // Use MEDIA_BASE_URL env if set (e.g. R2 public URL in production),
-  // otherwise fall back to the admin server URL.
-  const siteUrl = (import.meta.env.MEDIA_BASE_URL ?? import.meta.env.SITE_URL ?? "http://localhost:4321").replace(/\/$/, "");
+  const siteUrl = (import.meta.env.MEDIA_BASE_URL ?? baseUrl ?? "http://localhost:4321").replace(/\/$/, "");
 
   return {
     items: rows.map((r: any) => ({

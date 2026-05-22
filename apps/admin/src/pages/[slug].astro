@@ -51,19 +51,19 @@ async function renderContent(raw: string): Promise<{ html: string; hasForms: boo
   return { html, hasForms: true };
 }
 
-const { html: contentHtml, hasForms } = blocks ? { html: "", hasForms: false } : await renderContent(page.content);
+const { html: contentHtml, hasForms: hasContentForms } = blocks ? { html: "", hasForms: false } : await renderContent(page.content);
+const hasBlockForms = blocks ? blocks.some((b: any) => b.type === "form") : false;
+const hasForms = hasContentForms || hasBlockForms;
 ---
 <BaseLayout title={page.title} fullWidth={!!blocks}>
+  {hasForms && <Fragment set:html={APF_STYLES} />}
   {blocks ? (
     <BlockRenderer blocks={blocks} tokens={tokens} formsById={formsById} />
   ) : (
-    <>
-      {hasForms && <Fragment set:html={APF_STYLES} />}
-      <article>
-        <header class="post-header"><h1>{page.title}</h1></header>
-        <div class="post-content" set:html={contentHtml} />
-      </article>
-      {hasForms && <Fragment set:html={APF_SCRIPT} />}
-    </>
+    <article>
+      <header class="post-header"><h1>{page.title}</h1></header>
+      <div class="post-content" set:html={contentHtml} />
+    </article>
   )}
+  {hasForms && <Fragment set:html={APF_SCRIPT} />}
 </BaseLayout>

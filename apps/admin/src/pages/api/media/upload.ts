@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-  const mediaBase = (import.meta.env.MEDIA_BASE_URL ?? import.meta.env.SITE_URL ?? "http://localhost:4321").replace(/\/$/, "");
+  const mediaBase = (import.meta.env.MEDIA_BASE_URL ?? new URL(request.url).origin).replace(/\/$/, "");
 
   const [{ id }] = await (db as any).insert(wpPosts).values({
     postTitle: originalName.replace(/\.[^.]+$/, ""),

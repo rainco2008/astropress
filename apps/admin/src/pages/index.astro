@@ -6,6 +6,7 @@ import { wpOptions, wpPosts } from "@astropress/core/schema";
 import { eq } from "drizzle-orm";
 import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
 import type { Block, ThemeTokens } from "@astropress/core/types/theme";
+import { APF_STYLES, APF_SCRIPT } from "../lib/formRenderer";
 
 const db = Astro.locals.db;
 
@@ -63,9 +64,11 @@ function plainExcerpt(post: { excerpt: string; content: string }): string {
   if (post.excerpt) return post.excerpt;
   return post.content.replace(/<!--.*?-->/gs, "").replace(/<[^>]+>/g, "").slice(0, 200).trim() + (post.content.length > 200 ? "…" : "");
 }
+const hasBlockForms = frontBlocks ? frontBlocks.some((b: any) => b.type === "form") : false;
 ---
 {frontPageSlug ? (
   <BaseLayout title={frontTitle ?? undefined} fullWidth={!!frontBlocks}>
+    {hasBlockForms && <Fragment set:html={APF_STYLES} />}
     {frontBlocks ? (
       <BlockRenderer blocks={frontBlocks} tokens={tokens} formsById={formsById} />
     ) : (
@@ -73,6 +76,7 @@ function plainExcerpt(post: { excerpt: string; content: string }): string {
         <header class="post-header"><h1>{frontTitle}</h1></header>
       </article>
     )}
+    {hasBlockForms && <Fragment set:html={APF_SCRIPT} />}
   </BaseLayout>
 ) : (
   <BaseLayout>

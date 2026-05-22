@@ -267,7 +267,7 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
   const [error, setError] = useState("");
   const [resumed, setResumed] = useState(false);
   const [confirmBeforeAction, setConfirmBeforeAction] = useState(true);
-  const initialScrollDone = useRef(false);
+  const panelOpenRef = useRef(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -358,12 +358,15 @@ export default function AIWidget({ pageContext = {} }: AIWidgetProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
-  // Scroll to bottom — instant on first open (session restore), smooth for new messages
+  // Scroll to bottom — instant when panel opens, smooth only for new messages while already open
   useEffect(() => {
-    if (!open) return;
-    const behavior = initialScrollDone.current ? "smooth" : "instant";
+    if (!open) {
+      panelOpenRef.current = false;
+      return;
+    }
+    const behavior = panelOpenRef.current ? "smooth" : "instant";
+    panelOpenRef.current = true;
     bottomRef.current?.scrollIntoView({ behavior });
-    initialScrollDone.current = true;
   }, [open, messages]);
 
   // Focus input
