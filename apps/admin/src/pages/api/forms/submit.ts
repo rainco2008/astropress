@@ -24,23 +24,39 @@ async function saveEntries(db: any, formId: string, entries: any[]) {
     .onConflictDoUpdate({ target: wpOptions.optionName, set: { optionValue: JSON.stringify(entries) } });
 }
 
-export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Content-Type": "application/json",
+};
+
+export const OPTIONS: APIRoute = async () =>
+  new Response(null, { status: 204, headers: CORS });
+
+export const POST: APIRoute = async ({ request, locals }) => {
   const db = locals.db;
-  if (!db) return new Response(JSON.stringify({ error: "Server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+  if (!db) return new Response(JSON.stringify({ error: "Server error" }), { status: 500, headers: CORS });
+
+  // Read IP from headers — clientAddress throws on Cloudflare Pages without explicit header config
+  const ip =
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    "unknown";
 
   const body = await request.json() as { formId: string; fields: Record<string, any>; pageUrl?: string };
   const { formId, fields } = body;
 
-  if (!formId) return new Response(JSON.stringify({ error: "Missing formId" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  if (!formId) return new Response(JSON.stringify({ error: "Missing formId" }), { status: 400, headers: CORS });
 
   // Load form to validate
   const forms = await getForms(db);
-  const form = forms.find(f => f.id === formId);
-  if (!form) return new Response(JSON.stringify({ error: "Form not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  const form = forms.find((f: any) => f.id === formId);
+  if (!form) return new Response(JSON.stringify({ error: "Form not found" }), { status: 404, headers: CORS });
 
   // Honeypot check
   if (form.settings?.honeypot && fields["__hp"]) {
-    return new Response(JSON.stringify({ ok: true, confirmation: form.confirmations?.[0] }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, confirmation: form.confirmations?.[0] }), { headers: CORS });
   }
 
   // Check entry limit
@@ -48,7 +64,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     const entries = await getEntries(db, formId);
     const active = entries.filter((e: any) => e.status !== "trash");
     if (active.length >= Number(form.settings.limitEntriesCount ?? 0)) {
-      return new Response(JSON.stringify({ error: form.settings.limitEntriesMessage ?? "Form is closed." }), { status: 403, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: form.settings.limitEntriesMessage ?? "Form is closed." }), { status: 403, headers: CORS });
     }
   }
 
@@ -56,10 +72,10 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   if (form.settings?.scheduleForm) {
     const now = new Date();
     if (form.settings.scheduleStart && new Date(form.settings.scheduleStart) > now) {
-      return new Response(JSON.stringify({ error: form.settings.scheduleClosedMessage ?? "Form is not yet open." }), { status: 403, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: form.settings.scheduleClosedMessage ?? "Form is not yet open." }), { status: 403, headers: CORS });
     }
     if (form.settings.scheduleEnd && new Date(form.settings.scheduleEnd) < now) {
-      return new Response(JSON.stringify({ error: form.settings.scheduleClosedMessage ?? "Form is closed." }), { status: 403, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: form.settings.scheduleClosedMessage ?? "Form is closed." }), { status: 403, headers: CORS });
     }
   }
 
@@ -70,7 +86,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     if (["page_break", "section_divider", "html", "captcha"].includes(field.type)) continue;
     const val = fields[field.id];
     if (val === undefined || val === null || val === "" || (Array.isArray(val) && val.length === 0)) {
-      return new Response(JSON.stringify({ error: `"${field.label}" is required.` }), { status: 422, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: `"${field.label}" is required.` }), { status: 422, headers: CORS });
     }
   }
 
@@ -80,7 +96,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
     formId,
     fields,
     date: new Date().toISOString(),
-    ip: clientAddress ?? "unknown",
+    ip,
     userAgent: request.headers.get("user-agent") ?? "",
     status: "unread",
     pageUrl: body.pageUrl ?? "",
@@ -94,5 +110,5 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
   const confirmations: any[] = form.confirmations ?? [];
   const activeConf = confirmations.find((c: any) => c.active) ?? confirmations[0];
 
-  return new Response(JSON.stringify({ ok: true, entryId: entry.id, confirmation: activeConf ?? null }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, entryId: entry.id, confirmation: activeConf ?? null }), { headers: CORS });
 };

@@ -8,7 +8,7 @@ if (!Astro.locals.user || !db) return Astro.redirect("/login");
 const page = Number(Astro.url.searchParams.get("page") ?? "1");
 const search = Astro.url.searchParams.get("search") ?? "";
 
-const { items, total } = await listMedia(db, { page, search });
+const { items, total } = await listMedia(db, { page, search, baseUrl: Astro.url.origin });
 
 const perPage = 40;
 const totalPages = Math.ceil(total / perPage);
