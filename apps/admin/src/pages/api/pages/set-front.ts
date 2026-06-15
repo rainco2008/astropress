@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   let pageId: number;
   try {
-    const body = await request.json();
+    const body = await request.json() as { pageId?: unknown };
     pageId = Number(body.pageId);
     if (!pageId) throw new Error("invalid");
   } catch {

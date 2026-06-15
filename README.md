@@ -1,278 +1,172 @@
 # AstroPress
 
-A fully open-source, WordPress-compatible CMS built on Astro — admin and public frontend in a single deployment.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Fawsmin%2FAstroPress&project-name=astropress)
 
-No PHP. No legacy baggage. TypeScript, Astro 4 SSR, Drizzle ORM, and your choice of hosting.
+AstroPress 是一个基于 Astro 的开源 CMS。它保留 WordPress 风格的 `wp_*` 数据结构和内容管理思路，但运行时不依赖 PHP，管理后台和公开站点可以作为同一个 Astro SSR 应用部署。
 
----
+## 一键部署
 
-## Deploy
-
-| Platform | One-click |
-|----------|-----------|
-| Cloudflare Pages | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress) |
+| 平台 | 部署入口 |
+| --- | --- |
+| Cloudflare Workers / Pages | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2Fawsmin%2FAstroPress&project-name=astropress) |
 | Railway | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/astropress) |
 | Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/awsmin/AstroPress) |
-| Docker | `docker compose up` — see [Docker](#docker) below |
+| Docker | `docker compose up` |
 
----
+## 技术栈
 
-## What it is
+| 组件 | 版本 | 用途 |
+| --- | --- | --- |
+| Astro | `^6.4.7` | SSR 应用框架 |
+| @astrojs/cloudflare | `^13.7.0` | Cloudflare Workers / Pages 适配器 |
+| @astrojs/node | `^10.1.4` | 本地、Docker、VPS Node 部署适配器 |
+| @astrojs/react | `^5.0.7` | 管理后台 React islands |
+| @astrojs/check | `^0.9.9` | Astro 类型检查 |
+| Wrangler | `^4.100.0` | Cloudflare 构建和部署工具 |
+| @cloudflare/workers-types | `^4.20260615.1` | Cloudflare Runtime 类型 |
+| TypeScript | `^5.4.0` | 类型系统 |
+| Turbo | `^2.9.18` | Monorepo 任务编排 |
+| Drizzle ORM | `^0.45.2` | 数据库 schema 和查询 |
+| drizzle-kit | `^0.31.10` | 数据库迁移生成 |
+| @libsql/client | `^0.14.0` | SQLite / LibSQL / Turso 连接 |
+| postgres | `^3.4.0` | PostgreSQL 连接，仅 Node 环境使用 |
+| Hono | `^4.12.25` | API 路由基础 |
+| React | `^18.2.0` | 后台交互组件 |
+| React DOM | `^18.2.0` | React DOM 渲染 |
+| Lucia | `^3.2.0` | 会话认证 |
 
-AstroPress is a modern CMS that speaks WordPress — same `wp_*` database schema, same mental model — but runs on the edge with zero PHP. Developers get the extensibility of WordPress; users get a fast, cheap, globally-distributed site.
+根依赖还配置了 `pnpm.overrides`，用于固定已修复安全漏洞的间接依赖版本：`esbuild >=0.28.1`、`ws >=8.21.0`、`yaml >=2.8.3`、`js-yaml >=4.2.0`、`@babel/core >=7.29.6`。
 
+## 功能概览
 
-**Key features:**
-- WordPress-compatible `wp_*` schema (Drizzle ORM + SQLite/D1)
-- Visual block-based page and theme editor (full-screen ThemeEditor)
-- Gutenberg block editor for posts and classic content
-- Custom post types, taxonomies, custom fields (ACF-style) — all managed via UI
-- WPForms-style form builder with entries, conditional logic, multi-page
-- Navigation menus with drag-and-drop reorder and submenu nesting
-- Plugin system — drop a package in `/plugins`, register in `apps/admin/src/plugins.ts`
-- Single installation — admin (`/admin/*`) and public frontend (`/*`) in one app
-- Cloudflare-native: D1 database + R2 object storage + Pages hosting
-- Session-based auth (Lucia v3)
+- 单应用部署：`/admin/*` 是 CMS 后台，`/*` 是公开站点。
+- WordPress 风格数据结构：核心表沿用 `wp_*` 命名。
+- 可视化页面和主题编辑器。
+- 文章、页面、自定义内容类型、自定义分类、自定义字段。
+- 表单构建器、表单提交记录、条件逻辑和多页表单。
+- 菜单管理，支持拖拽排序和多级菜单。
+- 插件系统，可在 `plugins/` 下扩展。
+- Cloudflare 原生部署：D1 数据库、R2 媒体存储、Workers / Pages 运行时。
+- Node 部署支持：本地 SQLite、LibSQL/Turso 或 PostgreSQL。
 
----
+## 本地开发
 
-## Architecture
+### 环境要求
 
-AstroPress runs as a **single Astro SSR app** that serves both the admin dashboard and the public-facing website:
+- Node.js `>=20`
+- pnpm `>=9`
 
-```
-/              → public homepage (blog list or static front page)
-/blog/[slug]   → blog post
-/[slug]        → page (supports visual block editor)
-/forms/[id]    → standalone form page
-/admin/*       → CMS dashboard (auth required)
-/api/*         → REST API (most endpoints require auth)
-```
-
-Everything shares one database. No separate frontend deployment needed.
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-
-### 1. Install dependencies
+### 安装依赖
 
 ```bash
 git clone https://github.com/awsmin/AstroPress
-cd astropress
+cd AstroPress
 pnpm install
 ```
 
-### 2. Set up the local database
+### 初始化本地数据库
 
 ```bash
-pnpm db:setup        # runs migrations against local.db
-pnpm db:seed         # optional: seeds demo content
+pnpm db:setup
+pnpm db:seed
 ```
 
-### 3. Start dev server
+### 启动开发服务
 
 ```bash
 pnpm dev
 ```
 
-| URL | Description |
-|-----|-------------|
-| http://localhost:4321 | Admin + public site |
-| http://localhost:4321/admin | CMS dashboard |
+默认入口：
 
-Visit http://localhost:4321 — the **setup wizard** runs on first boot to create your admin account.
+| 地址 | 说明 |
+| --- | --- |
+| `http://localhost:4321` | 管理后台和公开站点 |
+| `http://localhost:4321/admin` | CMS 后台 |
+| `http://localhost:4322` | 独立 web app 开发入口 |
 
----
+首次访问会进入安装向导，用于创建管理员账号。
 
-## Deploy to Cloudflare Pages
+## Cloudflare 部署
 
-### One-click deploy
+点击 README 顶部的 Cloudflare 按钮后，按 Cloudflare 页面提示 fork 并创建项目。推荐配置：
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/awsmin/AstroPress)
-
-**No CLI or terminal needed.** After clicking the button, follow the steps below.
-
----
-
-### Step-by-step setup
-
-#### 1. Connect your repo
-
-1. Click the deploy button above
-2. Authorize GitHub and Cloudflare when prompted
-3. Cloudflare forks the repo and creates a Pages project
-
-#### 2. Configure build settings
-
-In the Pages project → **Settings → Build & Deployments**:
-
-| Setting | Value |
-|---|---|
+| 配置项 | 值 |
+| --- | --- |
 | Root directory | `apps/admin` |
 | Build command | `ASTRO_ADAPTER=cloudflare pnpm build` |
 | Build output directory | `dist` |
-| Deploy command | *(leave empty)* |
+| Deploy command | 留空 |
 
-#### 3. Add bindings
+需要绑定以下 Cloudflare 资源：
 
-Go to **Settings → Functions** and add the following bindings. Create each resource in Cloudflare first if it doesn't exist yet.
+| Binding | 类型 | 说明 |
+| --- | --- | --- |
+| `DB` | D1 Database | 存储 CMS 内容 |
+| `R2` | R2 Bucket | 存储媒体文件 |
+| `AI` | Workers AI | 可选，用于后台 AI 功能 |
 
-**D1 Database** (required — stores all CMS content)
+Cloudflare 构建使用 D1。PostgreSQL driver 已在 Cloudflare 构建中替换为专用 stub，避免部署时报 `Could not resolve "postgres"`。
 
-| Field | Value |
-|---|---|
-| Variable name | `DB` |
-| D1 database | Create a new database named `astropress` |
-
-**R2 Bucket** (required for media uploads)
-
-| Field | Value |
-|---|---|
-| Variable name | `R2` |
-| R2 bucket | Create a new bucket named `astropress-media` |
-
-**Workers AI** (optional — enables built-in AI with no external API key)
-
-| Field | Value |
-|---|---|
-| Variable name | `AI` |
-| Binding type | AI |
-
-> If you skip the AI binding, you can still use any external provider (Anthropic, OpenAI, Gemini, Mistral, Groq) by adding an API key in **Admin → Settings → AI**.
-
-#### 4. Deploy
-
-Save settings and trigger a new deployment. On first visit, AstroPress automatically creates all database tables and redirects you to the setup wizard to create your admin account.
-
----
-
-### Enable Cloudflare Workers AI in the admin
-
-Once the `AI` binding is added:
-
-1. Go to **Admin → Settings → AI**
-2. Select **Cloudflare Workers AI (no API key needed)**
-3. Choose a model:
-   - **Llama 3.1 8B** — fast, great for most tasks
-   - **Llama 3.3 70B** — smarter, slower
-   - **Mistral 7B** — good alternative
-4. Click **Save Settings**
-
-The AI assistant, block generator, and chat widget will all use your Workers AI binding at no extra per-token cost beyond your Cloudflare plan.
-
----
-
-### Manual CLI deploy
+## 手动部署到 Cloudflare
 
 ```bash
 cd apps/admin
 npx wrangler d1 create astropress
 npx wrangler r2 bucket create astropress-media
-npx wrangler pages project create astropress
-
-# Build and deploy
 ASTRO_ADAPTER=cloudflare pnpm build
-npx wrangler pages deploy dist
+npx wrangler deploy
 ```
 
-Add D1, R2, and AI bindings in the Cloudflare dashboard after the project is created (CLI does not set bindings for Pages projects).
+D1、R2、AI binding 仍建议在 Cloudflare Dashboard 中确认。
 
----
+## Node / Docker 部署
 
-## Deploy to Railway
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/astropress)
-
-Or manually:
-
-1. Push the repo to GitHub
-2. Create a new Railway project → **Deploy from GitHub repo**
-3. Set environment variables in the Railway dashboard:
-   - `DATABASE_URL` — e.g. `file:./data/astropress.db` (Railway persistent volume) or a PostgreSQL URL
-   - `AUTH_SECRET` — a random 32+ character string
-
-Railway auto-detects `railway.toml` and builds with Docker.
-
----
-
-## Deploy to Render
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/awsmin/AstroPress)
-
-Render reads `render.yaml` automatically. Set `DATABASE_URL` in the Render dashboard after the first deploy. A 1 GB persistent disk is attached at `/app/data` for the SQLite database.
-
----
-
-## Docker
-
-### Quick start
+Node 环境默认使用 `@astrojs/node` adapter，可通过 `DATABASE_URL` 指定数据库：
 
 ```bash
-cp .env.example .env     # edit AUTH_SECRET
+DATABASE_URL=file:./data/astropress.db
+AUTH_SECRET=your-32-character-secret
+```
+
+Docker 快速启动：
+
+```bash
+cp .env.example .env
 docker compose up
 ```
 
-Open http://localhost:4321 — database tables are created automatically on first boot, then the setup wizard runs to create your admin account.
+## 常用命令
 
-### Build image manually
+| 命令 | 说明 |
+| --- | --- |
+| `pnpm dev` | 启动所有开发服务 |
+| `pnpm build` | 构建全部 workspace |
+| `pnpm build:cf` | 构建 Cloudflare 版本 |
+| `pnpm deploy:cf` | 构建并使用 Wrangler 部署 |
+| `pnpm typecheck` | 类型检查 |
+| `pnpm db:setup` | 初始化本地数据库 |
+| `pnpm db:seed` | 写入演示数据 |
+| `pnpm audit --audit-level low` | 检查依赖漏洞 |
 
-```bash
-docker build -t astropress .
-docker run -p 4321:4321 \
-  -e DATABASE_URL=file:./data/astropress.db \
-  -e AUTH_SECRET=your-secret-here \
-  -v $(pwd)/data:/app/data \
-  astropress
-```
+## Monorepo 结构
 
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | SQLite: `file:./data/astropress.db` · PostgreSQL: `postgres://...` |
-| `AUTH_SECRET` | 32+ char string for session signing |
-
-On **Cloudflare Pages**, the D1 database is bound automatically via `wrangler.toml` — no `DATABASE_URL` needed.
-
----
-
-## Monorepo Structure
-
-```
+```text
 astropress/
 ├── apps/
-│   └── admin/              # Single Astro SSR app (admin + public frontend)
-│       └── src/
-│           ├── components/ # BlockRenderer.astro
-│           ├── islands/    # React islands (BlockEditor, FormBuilder, ThemeEditor …)
-│           ├── layouts/    # AdminLayout.astro, BaseLayout.astro
-│           ├── lib/        # icons.ts, posts.ts, public-query.ts, formRenderer.ts …
-│           ├── middleware.ts
-│           ├── pages/
-│           │   ├── index.astro          # public homepage
-│           │   ├── [slug].astro         # public pages
-│           │   ├── blog/[slug].astro    # blog posts
-│           │   ├── forms/[id].astro     # standalone form page
-│           │   ├── admin/               # CMS dashboard pages
-│           │   └── api/                 # REST endpoints
-│           └── plugins.ts
+│   ├── admin/          # CMS 后台和公开站点主应用
+│   └── web/            # 独立公开站点应用
 ├── packages/
-│   ├── core/               # Drizzle schema, registry, query helpers, types
-│   ├── auth/               # Lucia v3 session auth
-│   ├── api/                # Hono router foundation
-│   └── ui/                 # Shared React components
+│   ├── api/            # API 基础包
+│   ├── auth/           # 会话认证
+│   ├── core/           # 数据库、schema、registry、query helpers
+│   └── ui/             # 共享 UI 组件
 ├── plugins/
-│   └── seo/                # First-party SEO plugin
+│   └── seo/            # 内置 SEO 插件
 ├── themes/
-│   └── default/            # Default front-end theme styles
+│   └── default/        # 默认主题
+├── docs/               # 项目文档
+├── migrations/         # SQLite / PostgreSQL 迁移
 ├── Dockerfile
 ├── docker-compose.yml
 ├── railway.toml
@@ -280,11 +174,7 @@ astropress/
 └── wrangler.toml
 ```
 
----
-
-## Data Layer — Query Helpers
-
-Import from `@astropress/core/query` in any Astro page:
+## 查询工具示例
 
 ```astro
 ---
@@ -292,78 +182,17 @@ import { queryPosts, getField, getPostTerms, getSiteInfo } from "@astropress/cor
 
 const db = Astro.locals.db;
 
-// Like WP_Query
 const { posts, total, pages } = await queryPosts(db, {
-  type: "book",
-  perPage: 12,
-  orderBy: "title",
-  order: "asc",
+  type: "post",
+  perPage: 10,
+  orderBy: "date",
+  order: "desc",
 });
 
-// Like ACF get_field / get_post_meta
-const price = await getField(db, post.id, "price");
-
-// Like get_the_terms
-const categories = await getPostTerms(db, post.id, "category");
-
-// Like get_bloginfo
 const site = await getSiteInfo(db);
 ---
 ```
 
-| Function | WP equivalent |
-|---|---|
-| `queryPosts(db, args)` | `WP_Query` |
-| `getPost(db, idOrSlug, type?)` | `get_post()` |
-| `getPostById(db, id)` | `get_post()` |
-| `getPostBySlug(db, slug, type?)` | `get_page_by_path()` |
-| `getField(db, postId, key)` | ACF `get_field()` |
-| `getFields(db, postId)` | all meta as `Record<string,string>` |
-| `getTerms(db, taxonomy, args?)` | `get_terms()` |
-| `getPostTerms(db, postId, taxonomy)` | `get_the_terms()` |
-| `getOption(db, name, fallback?)` | `get_option()` |
-| `getSiteInfo(db)` | `get_bloginfo()` |
+## 许可证
 
----
-
-## Plugin System
-
-1. Create a package in `/plugins/my-plugin/`
-2. Export a plugin config:
-
-```ts
-// plugins/my-plugin/src/index.ts
-import { definePlugin, registerPostType } from "@astropress/core";
-
-export default definePlugin({
-  name: "My Plugin",
-  version: "1.0.0",
-  register() {
-    registerPostType("product", {
-      label: "Product",
-      pluralLabel: "Products",
-      icon: "bag",
-      public: true,
-      showInMenu: true,
-      supports: ["title", "editor", "thumbnail", "custom-fields"],
-    });
-  },
-});
-```
-
-3. Load it in `apps/admin/src/plugins.ts`:
-
-```ts
-import myPlugin from "@astropress/my-plugin";
-loadPlugin(myPlugin);
-```
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/](docs/).
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+MIT，详见 [LICENSE](LICENSE)。

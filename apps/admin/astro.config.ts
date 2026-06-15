@@ -30,9 +30,19 @@ export default defineConfig({
     }),
   ],
   vite: {
+    resolve: {
+      alias: isCloudflare
+        ? [
+            {
+              find: /\/packages\/core\/src\/db\/drivers\/postgres(\.ts)?$/,
+              replacement: resolve(__dirname, "../../packages/core/src/db/drivers/postgres.cloudflare.ts"),
+            },
+          ]
+        : [],
+    },
     ssr: {
       external: isCloudflare
-        ? ["node:fs/promises", "node:path", "node:fs", "node:os", "postgres", "drizzle-orm/postgres-js"]
+        ? ["node:fs/promises", "node:path", "node:fs", "node:os"]
         : ["node:fs/promises", "node:path", "node:fs", "node:os"],
     },
   },

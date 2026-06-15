@@ -13,9 +13,18 @@
     "db:setup": "pnpm db:migrate:local"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
+    "turbo": "^2.9.18",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@babel/core": ">=7.29.6",
+      "esbuild": ">=0.28.1",
+      "js-yaml": ">=4.2.0",
+      "ws": ">=8.21.0",
+      "yaml": ">=2.8.3"
+    }
   },
   "engines": {
     "node": ">=20",

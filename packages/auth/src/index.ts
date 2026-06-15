@@ -8,6 +8,8 @@ import { eq, sql } from "drizzle-orm";
 import type { Database } from "@astropress/core";
 import { wpSessions, wpUsers } from "@astropress/core/schema";
 
+type SessionRow = typeof wpSessions.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // Custom Lucia adapter — bridges WordPress integer user IDs to Lucia's string IDs
 // ---------------------------------------------------------------------------
@@ -57,7 +59,7 @@ class WordPressAdapter implements Adapter {
       .from(wpSessions)
       .where(eq(wpSessions.userId, userId));
 
-    return rows.map((r) => ({
+    return rows.map((r: SessionRow) => ({
       id: r.id,
       userId: r.userId,
       expiresAt: new Date(r.expiresAt * 1000),
