@@ -1,0 +1,206 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { wpUsers, wpUsermeta } from "@astropress/core/schema";
+import { eq, and } from "drizzle-orm";
+
+const db = Astro.locals.db;
+const me = Astro.locals.user;
+if (!db || !me) return Astro.redirect("/login");
+
+const isNew = Astro.params.id === "new";
+const userId = isNew ? null : Number(Astro.params.id);
+
+let user: { id: number; userLogin: string; userEmail: string; displayName: string; userRegistered: string } | null = null;
+let currentRole = "subscriber";
+
+if (!isNew && userId) {
+  const [row] = await db.select().from(wpUsers).where(eq(wpUsers.id, userId)).limit(1);
+  if (!row) return Astro.redirect("/admin/users");
+  user = { id: row.id, userLogin: row.userLogin, userEmail: row.userEmail, displayName: row.displayName, userRegistered: row.userRegistered };
+
+  const [capRow] = await db
+    .select({ value: wpUsermeta.metaValue })
+    .from(wpUsermeta)
+    .where(and(eq(wpUsermeta.userId, userId), eq(wpUsermeta.metaKey, "wp_capabilities")))
+    .limit(1);
+  if (capRow?.value) {
+    try {
+      const caps = JSON.parse(capRow.value) as Record<string, boolean>;
+      for (const r of ["administrator","editor","author","contributor","subscriber"]) {
+        if (caps[r]) { currentRole = r; break; }
+      }
+    } catch {}
+  }
+}
+
+const ROLES = [
+  { value: "administrator", label: "Administrator" },
+  { value: "editor",        label: "Editor" },
+  { value: "author",        label: "Author" },
+  { value: "contributor",   label: "Contributor" },
+  { value: "subscriber",    label: "Subscriber" },
+];
+
+const pageTitle = isNew ? "Add New User" : `Edit User: ${user?.userLogin}`;
+---
+<AdminLayout title={pageTitle}>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <h1 class="wp-heading-inline">{pageTitle}</h1>
+    <a href="/admin/users" class="page-title-action">← All Users</a>
+  </div>
+  <hr class="wp-header-end" />
+
+  <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;max-width:900px">
+    <div>
+
+      <!-- Name & Login -->
+      <div class="postbox">
+        <div class="postbox-header"><h2 class="postbox-title">Account Info</h2></div>
+        <div class="postbox-inside" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <label class="wp-form-label">Username {isNew && <span style="color:#d63638">*</span>}</label>
+            {isNew ? (
+              <input id="userLogin" type="text" class="wp-input" placeholder="username" autocomplete="off" required />
+            ) : (
+              <input type="text" class="wp-input" value={user?.userLogin} disabled style="background:#f6f7f7;color:#646970" />
+            )}
+            {isNew && <p style="font-size:11px;color:#646970;margin:3px 0 0">Lowercase letters, numbers and underscores only.</p>}
+          </div>
+
+          <div>
+            <label class="wp-form-label">Display Name</label>
+            <input id="displayName" type="text" class="wp-input" value={user?.displayName ?? ""} placeholder="Display name" />
+          </div>
+
+          <div style="grid-column:1/-1">
+            <label class="wp-form-label">Email <span style="color:#d63638">*</span></label>
+            <input id="userEmail" type="email" class="wp-input" value={user?.userEmail ?? ""} placeholder="email@example.com" required />
+          </div>
+        </div>
+      </div>
+
+      <!-- Password -->
+      <div class="postbox" style="margin-top:16px">
+        <div class="postbox-header"><h2 class="postbox-title">{isNew ? "Password" : "Change Password"}</h2></div>
+        <div class="postbox-inside">
+          {!isNew && <p style="font-size:12px;color:#646970;margin:0 0 10px">Leave blank to keep the current password.</p>}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div>
+              <label class="wp-form-label">New Password {isNew && <span style="color:#d63638">*</span>}</label>
+              <input id="password" type="password" class="wp-input" placeholder="••••••••" autocomplete="new-password" />
+            </div>
+            <div>
+              <label class="wp-form-label">Confirm Password</label>
+              <input id="passwordConfirm" type="password" class="wp-input" placeholder="••••••••" autocomplete="new-password" />
+            </div>
+          </div>
+          <p id="pw-match-hint" style="font-size:11px;color:#d63638;margin:6px 0 0;display:none">Passwords do not match.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sidebar -->
+    <aside>
+      <div class="postbox">
+        <div class="postbox-header"><h2 class="postbox-title">Role</h2></div>
+        <div class="postbox-inside">
+          <label class="wp-form-label">Role</label>
+          <select id="userRole" class="wp-select" style="width:100%">
+            {ROLES.map(r => (
+              <option value={r.value} selected={r.value === currentRole}>{r.label}</option>
+            ))}
+          </select>
+          <p style="font-size:11px;color:#646970;margin:8px 0 0">
+            <strong>Administrator</strong> — full access<br/>
+            <strong>Editor</strong> — manage all posts<br/>
+            <strong>Author</strong> — own posts only<br/>
+            <strong>Contributor</strong> — write, no publish<br/>
+            <strong>Subscriber</strong> — read only
+          </p>
+        </div>
+      </div>
+
+      <div class="postbox" style="margin-top:16px">
+        <div class="postbox-inside">
+          <div id="save-status" style="font-size:12px;color:#646970;margin-bottom:10px;min-height:16px"></div>
+          <button onclick="saveUser()" class="button-primary" style="width:100%;justify-content:center">
+            {isNew ? "Add User" : "Update User"}
+          </button>
+          {!isNew && user?.id !== me.id && (
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--wp-gray-100)">
+              <button
+                onclick={`if(confirm('Delete this user?')) { fetch('/api/users/${user?.id}',{method:'DELETE'}).then(()=>location.href='/admin/users') }`}
+                class="button-link-delete"
+                style="font-size:12px"
+              >Delete User</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script define:vars={{ isNew, userId: userId ?? null }}>
+    async function saveUser() {
+      const pw = document.getElementById("password").value;
+      const pwc = document.getElementById("passwordConfirm").value;
+      const hint = document.getElementById("pw-match-hint");
+
+      if (pw && pw !== pwc) {
+        hint.style.display = "block";
+        return;
+      }
+      hint.style.display = "none";
+
+      if (isNew && !pw) {
+        alert("Password is required for new users.");
+        return;
+      }
+
+      const userEmail = document.getElementById("userEmail").value.trim();
+      const displayName = document.getElementById("displayName").value.trim();
+      const role = document.getElementById("userRole").value;
+
+      if (!userEmail) { alert("Email is required."); return; }
+
+      document.getElementById("save-status").textContent = "Saving…";
+
+      try {
+        let res;
+        if (isNew) {
+          const userLogin = document.getElementById("userLogin").value.trim();
+          if (!userLogin) { alert("Username is required."); document.getElementById("save-status").textContent = ""; return; }
+          res = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userLogin, userEmail, displayName, password: pw, role }),
+          });
+        } else {
+          const body = { userEmail, displayName, role };
+          if (pw) body.password = pw;
+          res = await fetch(`/api/users/${userId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+        }
+
+        if (res.ok) {
+          if (isNew) {
+            const data = await res.json();
+            location.href = `/admin/users/${data.id}`;
+          } else {
+            document.getElementById("save-status").textContent = "Saved ✓";
+            setTimeout(() => document.getElementById("save-status").textContent = "", 3000);
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          document.getElementById("save-status").textContent = err.error || "Error saving";
+        }
+      } catch {
+        document.getElementById("save-status").textContent = "Error saving";
+      }
+    }
+  </script>
+</AdminLayout>

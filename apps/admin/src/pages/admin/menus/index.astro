@@ -1,0 +1,130 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { eq } from "drizzle-orm";
+import { wpTerms, wpTermTaxonomy } from "@astropress/core/schema";
+
+const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
+const menus = await db
+  .select({ id: wpTerms.termId, name: wpTerms.name, slug: wpTerms.slug })
+  .from(wpTerms)
+  .innerJoin(wpTermTaxonomy, eq(wpTermTaxonomy.termId, wpTerms.termId))
+  .where(eq(wpTermTaxonomy.taxonomy, "nav_menu"));
+---
+<AdminLayout title="Menus">
+
+  <h1 class="wp-heading-inline">Menus</h1>
+  <button id="btn-new" class="page-title-action" style="background:none;border:none;cursor:pointer;font-family:inherit">Add New</button>
+  <hr class="wp-header-end" />
+
+  <div id="create-panel" style="display:none;background:#fff;border:1px solid #dcdcde;padding:16px 20px;margin-bottom:16px;max-width:480px">
+    <h2 style="margin:0 0 12px;font-size:14px;font-weight:600">Create Menu</h2>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Menu Name</label>
+        <input id="new-name" type="text" placeholder="e.g. Primary Navigation" class="regular-text" style="width:100%" />
+      </div>
+      <button id="btn-create" class="button button-primary">Create</button>
+      <button id="btn-cancel" class="button">Cancel</button>
+    </div>
+  </div>
+
+  {menus.length === 0 ? (
+    <div class="ap-empty-state">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="color:#8c8f94;margin-bottom:12px">
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      <h2 style="font-size:15px;font-weight:600;color:#1d2327;margin:0 0 8px">No Menus Yet</h2>
+      <p style="font-size:13px;color:#646970;margin:0 0 20px;line-height:1.5">
+        Create a menu and add it to your site's navigation areas.
+      </p>
+      <button onclick="document.getElementById('btn-new').click()" class="button button-primary">Create Your First Menu</button>
+    </div>
+  ) : (
+    <table class="wp-list-table widefat fixed striped">
+      <thead>
+        <tr>
+          <th scope="col" class="manage-column column-primary">Name</th>
+          <th scope="col" class="manage-column" style="width:140px">Slug</th>
+          <th scope="col" class="manage-column" style="width:180px">Location</th>
+        </tr>
+      </thead>
+      <tbody>
+        {menus.map((menu: any) => (
+          <tr>
+            <td class="title column-title has-row-actions column-primary">
+              <strong>
+                <a href={`/admin/menus/${menu.id}`} class="row-title">{menu.name}</a>
+              </strong>
+              <div class="row-actions">
+                <span class="edit"><a href={`/admin/menus/${menu.id}`}>Edit</a></span> |
+                <span class="trash">
+                  <button
+                    onclick={`deleteMenu(${menu.id}, '${menu.name.replace(/'/g, "\\'")}')`}
+                    class="ap-row-delete-btn"
+                  >Delete</button>
+                </span>
+              </div>
+            </td>
+            <td style="color:var(--wp-gray-600)">
+              <code style="font-size:11px;background:#f6f7f7;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">{menu.slug}</code>
+            </td>
+            <td style="color:var(--wp-gray-600);font-size:12px">
+              {menu.slug === "primary" ? (
+                <span style="color:#2271b1;font-weight:600">Primary Navigation</span>
+              ) : menu.slug === "footer" ? (
+                <span style="color:#2271b1;font-weight:600">Footer Navigation</span>
+              ) : (
+                <span style="color:#c3c4c7">—</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+
+  <div style="margin-top:20px;background:#f6f7f7;border:1px solid #dcdcde;padding:14px 16px;max-width:600px">
+    <p style="margin:0;font-size:13px;color:#646970">
+      The web theme uses the menu with slug <code style="background:#fff;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">primary</code> as the main navigation.
+      Name your menu anything — as long as its slug is <code style="background:#fff;border:1px solid #dcdcde;padding:1px 5px;border-radius:2px">primary</code> it will appear in the header automatically.
+    </p>
+  </div>
+
+  <script>
+    document.getElementById('btn-new')!.onclick = () => {
+      document.getElementById('create-panel')!.style.display = 'block';
+      (document.getElementById('new-name') as HTMLInputElement).focus();
+    };
+    document.getElementById('btn-cancel')!.onclick = () => {
+      document.getElementById('create-panel')!.style.display = 'none';
+    };
+    document.getElementById('btn-create')!.onclick = async () => {
+      const name = (document.getElementById('new-name') as HTMLInputElement).value.trim();
+      if (!name) return;
+      const r = await fetch('/api/menus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (r.ok) {
+        const { id } = await r.json() as any;
+        window.location.href = `/admin/menus/${id}`;
+      }
+    };
+    (document.getElementById('new-name') as HTMLInputElement).onkeydown = (e) => {
+      if (e.key === 'Enter') (document.getElementById('btn-create') as HTMLButtonElement).click();
+    };
+    async function deleteMenu(id: number, name: string) {
+      if (!confirm(`Delete menu "${name}" and all its items? This cannot be undone.`)) return;
+      await fetch(`/api/menus/${id}`, { method: 'DELETE' });
+      location.reload();
+    }
+    (window as any).deleteMenu = deleteMenu;
+  </script>
+
+</AdminLayout>
+

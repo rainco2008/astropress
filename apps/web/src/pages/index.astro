@@ -1,0 +1,107 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import BlockRenderer from "../components/BlockRenderer.astro";
+import { getPublishedPosts } from "../lib/query";
+import { wpOptions, wpPosts } from "@astropress/core/schema";
+import { eq } from "drizzle-orm";
+import { DEFAULT_THEME_TOKENS } from "@astropress/core/types/theme";
+import type { Block, ThemeTokens } from "@astropress/core/types/theme";
+
+const db = Astro.locals.db;
+
+// Check if a static front page is set
+let frontPageSlug: string | null = null;
+let frontBlocks: Block[] | null = null;
+let frontTitle: string | null = null;
+let tokens: ThemeTokens = DEFAULT_THEME_TOKENS;
+let formsById: Record<string, any> = {};
+
+if (db) {
+  const [showRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "show_on_front")).limit(1);
+  const [frontRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "page_on_front")).limit(1);
+
+  if (showRow?.value === "page" && frontRow?.value && frontRow.value !== "0") {
+    const pageId = Number(frontRow.value);
+    const [pageRow] = await db.select({ id: wpPosts.id, title: wpPosts.postTitle, slug: wpPosts.postName })
+      .from(wpPosts).where(eq(wpPosts.id, pageId)).limit(1);
+
+    if (pageRow) {
+      frontPageSlug = pageRow.slug;
+      frontTitle = pageRow.title;
+      const [schemaRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+        .where(eq(wpOptions.optionName, `astropress_page_schema_${pageRow.slug}`)).limit(1);
+      if (schemaRow?.value) {
+        const schema = JSON.parse(schemaRow.value);
+        if (schema.blocks?.length > 0) frontBlocks = schema.blocks;
+      }
+    }
+  }
+
+  const [tokenRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_theme_config")).limit(1);
+  if (tokenRow?.value) tokens = JSON.parse(tokenRow.value);
+
+  const [formsRow] = await db.select({ value: wpOptions.optionValue }).from(wpOptions).where(eq(wpOptions.optionName, "astropress_forms")).limit(1);
+  if (formsRow?.value) {
+    const allForms: any[] = JSON.parse(formsRow.value);
+    for (const f of allForms) formsById[String(f.id)] = f;
+  }
+}
+
+// Fall back to blog post list
+const page = Number(Astro.url.searchParams.get("page") ?? "1");
+const perPage = 10;
+const { posts, total } = (!frontPageSlug && db)
+  ? await getPublishedPosts(db, { page, perPage })
+  : { posts: [], total: 0 };
+const totalPages = Math.ceil(total / perPage);
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function plainExcerpt(post: { excerpt: string; content: string }): string {
+  if (post.excerpt) return post.excerpt;
+  return post.content.replace(/<!--.*?-->/gs, "").replace(/<[^>]+>/g, "").slice(0, 200).trim() + (post.content.length > 200 ? "…" : "");
+}
+---
+{frontPageSlug ? (
+  <BaseLayout title={frontTitle ?? undefined} fullWidth={!!frontBlocks}>
+    {frontBlocks ? (
+      <BlockRenderer blocks={frontBlocks} tokens={tokens} formsById={formsById} />
+    ) : (
+      <article>
+        <header class="post-header"><h1>{frontTitle}</h1></header>
+      </article>
+    )}
+  </BaseLayout>
+) : (
+  <BaseLayout>
+    {posts.length === 0 ? (
+      <div style="text-align:center;padding:60px 0">
+        <p style="color:var(--color-muted);font-size:1.1rem">No posts yet. Check back soon!</p>
+      </div>
+    ) : (
+      <ul class="post-list">
+        {posts.map((post) => (
+          <li class="post-list-item">
+            <h2><a href={`/blog/${post.slug}`}>{post.title}</a></h2>
+            <p class="post-meta">{formatDate(post.date)}</p>
+            <p class="post-excerpt">{plainExcerpt(post)}</p>
+            <a href={`/blog/${post.slug}`} class="read-more">Read more →</a>
+          </li>
+        ))}
+      </ul>
+    )}
+    {totalPages > 1 && (
+      <nav class="pagination" aria-label="Pagination">
+        {page > 1 && <a href={`/?page=${page - 1}`}>← Previous</a>}
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          p === page
+            ? <span class="current">{p}</span>
+            : <a href={`/?page=${p}`}>{p}</a>
+        ))}
+        {page < totalPages && <a href={`/?page=${page + 1}`}>Next →</a>}
+      </nav>
+    )}
+  </BaseLayout>
+)}

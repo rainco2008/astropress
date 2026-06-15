@@ -1,0 +1,167 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { eq } from "drizzle-orm";
+import { wpOptions } from "@astropress/core/schema";
+import type { LoopTemplate } from "@astropress/core/types/theme";
+import { DEFAULT_LOOP_TEMPLATES } from "../../../../lib/loopTemplates";
+
+const db = Astro.locals.db;
+if (!Astro.locals.user || !db) return Astro.redirect("/login");
+
+const [row] = await db.select({ value: wpOptions.optionValue }).from(wpOptions)
+  .where(eq(wpOptions.optionName, "astropress_loop_templates")).limit(1);
+const userTemplates: LoopTemplate[] = row?.value ? JSON.parse(row.value) : [];
+---
+<AdminLayout title="Loop Templates">
+  <h1 class="wp-heading-inline">Loop Item Templates</h1>
+  <a href="#" class="page-title-action" id="create-btn">Add New</a>
+  <hr class="wp-header-end" />
+
+  <!-- Create dialog -->
+  <div id="create-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:6px;padding:28px;width:480px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+      <h2 style="margin:0 0 16px;font-size:18px">New Loop Template</h2>
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Template Name</label>
+      <input id="new-name" type="text" placeholder="e.g. Blog Card" class="regular-text" style="width:100%;margin-bottom:16px" />
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">Start from</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px" id="starter-grid">
+        {DEFAULT_LOOP_TEMPLATES.map(t => (
+          <button class="starter-btn" data-id={t.id} style="padding:12px;border:2px solid #dcdcde;border-radius:4px;cursor:pointer;text-align:left;background:#f6f7f7;font-size:13px;font-weight:600">
+            {t.name}
+          </button>
+        ))}
+        <button class="starter-btn" data-id="blank" style="padding:12px;border:2px solid #dcdcde;border-radius:4px;cursor:pointer;text-align:left;background:#f6f7f7;font-size:13px;font-weight:600">
+          Blank Template
+        </button>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="cancel-btn" class="button">Cancel</button>
+        <button id="confirm-btn" class="button button-primary">Create &amp; Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <p style="color:#646970;font-size:13px;margin-bottom:20px;line-height:1.6">
+    Loop Item Templates define how each post card looks inside a Query Loop block. Design them with the visual editor — use loop blocks that pull content dynamically from each post.
+  </p>
+
+  <!-- Default templates -->
+  <h2 style="font-size:14px;font-weight:700;margin:0 0 12px;color:#1d2327">Built-in Templates</h2>
+  <table class="wp-list-table widefat fixed striped" style="margin-bottom:28px">
+    <thead><tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>
+      {DEFAULT_LOOP_TEMPLATES.map(t => (
+        <tr>
+          <td style="font-weight:600">{t.name}</td>
+          <td><span style="background:#e0f0ff;color:#0073aa;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600">Built-in</span></td>
+          <td><span style="color:#646970;font-size:13px">Read-only</span></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <!-- User templates -->
+  <h2 style="font-size:14px;font-weight:700;margin:0 0 12px;color:#1d2327">My Templates</h2>
+  {userTemplates.length === 0 ? (
+    <div class="ap-empty-state" style="max-width:480px">
+      <p style="font-size:13px;color:#646970;margin:0 0 16px">No custom loop templates yet. Create one to design how your posts look in the Query Loop block.</p>
+      <a href="#" class="button button-primary" id="create-btn2">Create Your First Template</a>
+    </div>
+  ) : (
+    <table class="wp-list-table widefat fixed striped" id="user-templates-table">
+      <thead><tr>
+        <th>Name</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>
+        {userTemplates.map(t => (
+          <tr id={`row-${t.id}`}>
+            <td style="font-weight:600">
+              <a href={`/admin/themes/edit/__loop-item_${t.id}__`} style="color:#2271b1;text-decoration:none">{t.name}</a>
+            </td>
+            <td style="color:#646970;font-size:12px">{new Date(t.createdAt).toLocaleDateString()}</td>
+            <td style="display:flex;gap:8px;align-items:center">
+              <a href={`/admin/themes/edit/__loop-item_${t.id}__`} class="button button-small">Edit</a>
+              <button class="button button-small delete-btn" data-id={t.id} style="color:#d63638;border-color:#d63638">Delete</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+
+  <script is:inline>
+    var selectedStarter = "default-with-image";
+
+    function openDialog() {
+      var d = document.getElementById("create-dialog");
+      d.style.display = "flex";
+      document.getElementById("new-name").focus();
+    }
+
+    document.getElementById("create-btn")?.addEventListener("click", function(e) { e.preventDefault(); openDialog(); });
+    document.getElementById("create-btn2")?.addEventListener("click", function(e) { e.preventDefault(); openDialog(); });
+    document.getElementById("cancel-btn")?.addEventListener("click", function() {
+      document.getElementById("create-dialog").style.display = "none";
+    });
+
+    document.querySelectorAll(".starter-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll(".starter-btn").forEach(function(b) { b.style.borderColor = "#dcdcde"; b.style.background = "#f6f7f7"; });
+        btn.style.borderColor = "#2271b1";
+        btn.style.background = "#e8f0fa";
+        selectedStarter = btn.dataset.id;
+      });
+    });
+    // Select first by default
+    var first = document.querySelector(".starter-btn");
+    if (first) { first.style.borderColor = "#2271b1"; first.style.background = "#e8f0fa"; }
+
+    document.getElementById("confirm-btn")?.addEventListener("click", async function() {
+      var name = document.getElementById("new-name").value.trim();
+      if (!name) { document.getElementById("new-name").focus(); return; }
+      var btn = document.getElementById("confirm-btn");
+      btn.disabled = true;
+      btn.textContent = "Creating\u2026";
+
+      var startBlocks = [];
+      if (selectedStarter && selectedStarter !== "blank") {
+        try {
+          var res = await fetch("/api/themes/loop-templates/defaults/" + selectedStarter);
+          if (res.ok) { var data = await res.json(); startBlocks = data.blocks || []; }
+        } catch(e) {}
+      }
+
+      var res = await fetch("/api/themes/loop-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, blocks: startBlocks }),
+      });
+      if (res.ok) {
+        var data = await res.json();
+        window.location.href = "/admin/themes/edit/" + data.schemaSlug;
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Create & Edit";
+        alert("Failed to create template.");
+      }
+    });
+
+    document.querySelectorAll(".delete-btn").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
+        if (!confirm("Delete this template? This cannot be undone.")) return;
+        var id = btn.dataset.id;
+        var res = await fetch("/api/themes/loop-templates/" + id, { method: "DELETE" });
+        if (res.ok) {
+          var row = document.getElementById("row-" + id);
+          if (row) row.remove();
+        }
+      });
+    });
+  </script>
+</AdminLayout>

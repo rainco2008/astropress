@@ -1,0 +1,76 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+
+const user = Astro.locals.user;
+const db = Astro.locals.db;
+
+let postCount = 0;
+let pageCount = 0;
+let formCount = 0;
+
+if (db) {
+  const { wpPosts, wpOptions } = await import("@astropress/core/schema");
+  const { eq, and, count } = await import("drizzle-orm");
+
+  const [posts] = await db.select({ c: count() }).from(wpPosts).where(and(eq(wpPosts.postType, "post"), eq(wpPosts.postStatus, "publish")));
+  const [pages] = await db.select({ c: count() }).from(wpPosts).where(and(eq(wpPosts.postType, "page"), eq(wpPosts.postStatus, "publish")));
+  postCount = posts?.c ?? 0;
+  pageCount = pages?.c ?? 0;
+
+  const formsRow = await db.select().from(wpOptions).where(eq(wpOptions.optionName, "astropress_forms")).get();
+  if (formsRow?.optionValue) {
+    try { formCount = JSON.parse(formsRow.optionValue).length; } catch {}
+  }
+}
+
+const stats = [
+  { label: "Posts", value: postCount, href: "/admin/posts" },
+  { label: "Pages", value: pageCount, href: "/admin/pages" },
+  { label: "Forms", value: formCount, href: "/admin/forms" },
+];
+---
+<AdminLayout title="Dashboard">
+  <h1 class="wp-page-title">Dashboard</h1>
+
+  <div class="wp-dashboard-stats">
+    {stats.map((s) => (
+      <a href={s.href} class="wp-stat-box">
+        <div class="wp-stat-num">{s.value}</div>
+        <div class="wp-stat-label">{s.label}</div>
+      </a>
+    ))}
+  </div>
+
+  <div class="postbox">
+    <div class="postbox-inside" style="padding:16px 20px">
+      <h2 style="margin:0 0 6px;font-size:15px;font-weight:600">
+        Welcome{user ? `, ${user.displayName}` : ""}!
+      </h2>
+      <p style="margin:0;color:var(--wp-gray-500);font-size:13px">
+        Your AstroPress CMS is running. Use the AI assistant (bottom right) to get started quickly.
+      </p>
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+    <div class="postbox" style="margin:0">
+      <div class="postbox-header"><h2 class="postbox-title">Quick Actions</h2></div>
+      <div class="postbox-inside" style="display:flex;flex-direction:column;gap:8px">
+        <a href="/admin/posts/new" class="button" style="justify-content:center">New Post</a>
+        <a href="/admin/pages/new" class="button" style="justify-content:center">New Page</a>
+        <a href="/admin/forms/new" class="button" style="justify-content:center">New Form</a>
+      </div>
+    </div>
+
+    <div class="postbox" style="margin:0">
+      <div class="postbox-header"><h2 class="postbox-title">AI Assistant</h2></div>
+      <div class="postbox-inside">
+        <p style="margin:0 0 10px;font-size:12px;color:var(--wp-gray-500);line-height:1.5">
+          Click the spark button (bottom right) to write content, generate titles, or manage your site using natural language.
+        </p>
+        <a href="/admin/settings/ai" style="font-size:12px;color:var(--wp-blue)">Configure AI providers →</a>
+      </div>
+    </div>
+  </div>
+</AdminLayout>

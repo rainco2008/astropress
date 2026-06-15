@@ -1,0 +1,39 @@
+{
+  "name": "@astropress/admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "build:cf": "ASTRO_ADAPTER=cloudflare astro build",
+    "deploy:cf": "ASTRO_ADAPTER=cloudflare astro build && wrangler deploy",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^11.2.0",
+    "@astrojs/node": "^8.0.0",
+    "@astrojs/react": "^3.0.0",
+    "@astropress/api": "workspace:*",
+    "@astropress/auth": "workspace:*",
+    "@astropress/core": "workspace:*",
+    "@astropress/theme-default": "workspace:*",
+    "@astropress/plugin-seo": "workspace:*",
+    "@astropress/ui": "workspace:*",
+    "@libsql/client": "^0.14.0",
+    "astro": "^4.0.0",
+    "drizzle-orm": "^0.36.0",
+    "fflate": "^0.8.3",
+    "hono": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@cloudflare/workers-types": "^4.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^3.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.astro/
+.cache/
+.turbo/
+*.local
+.env
+.env.*
+!.env.example
+.wrangler/
+local.db
+
+# Uploaded media files
+apps/admin/public/media/
+apps/web/public/media/

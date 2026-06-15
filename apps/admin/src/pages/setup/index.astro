@@ -1,0 +1,118 @@
+---
+import { eq } from "drizzle-orm";
+import { wpOptions } from "@astropress/core/schema";
+
+// If already set up, redirect to admin
+const db = Astro.locals.db;
+if (db) {
+  const [row] = await db
+    .select({ value: wpOptions.optionValue })
+    .from(wpOptions)
+    .where(eq(wpOptions.optionName, "astropress_setup_complete"))
+    .limit(1);
+  if (row?.value === "1") return Astro.redirect("/admin/dashboard");
+}
+
+const error = Astro.url.searchParams.get("error");
+const errorMessages: Record<string, string> = {
+  fields: "All fields are required.",
+  password: "Passwords do not match.",
+  unknown: "Setup failed. Please try again.",
+};
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Setup — AstroPress</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      body {
+        margin: 0; font-family: system-ui, -apple-system, sans-serif;
+        background: #f0f0f1; min-height: 100vh;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .card {
+        background: #fff; border: 1px solid #dcdcde; border-radius: 6px;
+        padding: 40px 48px; width: 100%; max-width: 480px;
+        box-shadow: 0 4px 16px rgba(0,0,0,.08);
+      }
+      .brand { text-align: center; margin-bottom: 32px; }
+      .brand-logo { font-size: 40px; margin-bottom: 8px; }
+      .brand-name { font-size: 22px; font-weight: 700; color: #1d2327; }
+      .brand-sub { font-size: 13px; color: #646970; margin-top: 4px; }
+      .step-indicator {
+        display: flex; gap: 0; margin-bottom: 28px; border-radius: 4px; overflow: hidden;
+        border: 1px solid #dcdcde;
+      }
+      .step { flex: 1; padding: 8px; text-align: center; font-size: 11px; font-weight: 600; background: #f6f7f7; color: #646970; }
+      .step.active { background: #2271b1; color: #fff; }
+      .step.done { background: #d1e7dd; color: #146c43; }
+      label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #1d2327; }
+      input, textarea {
+        display: block; width: 100%; padding: 9px 12px; font-size: 14px;
+        border: 1px solid #8c8f94; border-radius: 3px; margin-bottom: 16px; outline: none;
+      }
+      input:focus { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; }
+      .hint { font-size: 11px; color: #646970; margin-top: -12px; margin-bottom: 16px; }
+      button[type="submit"] {
+        width: 100%; padding: 11px; background: #2271b1; color: #fff;
+        border: none; border-radius: 3px; font-size: 15px; font-weight: 600;
+        cursor: pointer; margin-top: 4px;
+      }
+      button[type="submit"]:hover { background: #135e96; }
+      .error {
+        background: #fcf0f1; border-left: 4px solid #d63638;
+        color: #d63638; padding: 10px 14px; font-size: 13px;
+        border-radius: 2px; margin-bottom: 20px;
+      }
+      h2 { font-size: 16px; font-weight: 600; margin: 0 0 20px; color: #1d2327; }
+      .divider { border: none; border-top: 1px solid #dcdcde; margin: 20px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="brand">
+        <div class="brand-logo">⚡</div>
+        <div class="brand-name">AstroPress</div>
+        <div class="brand-sub">Installation — takes less than a minute</div>
+      </div>
+
+      <div class="step-indicator">
+        <div class="step active">1 Site Info</div>
+        <div class="step">2 Admin Account</div>
+        <div class="step">3 Done</div>
+      </div>
+
+      {error && <div class="error">{errorMessages[error] ?? errorMessages.unknown}</div>}
+
+      <form method="POST" action="/api/setup">
+        <h2>Site Information</h2>
+        <label for="site_title">Site Title</label>
+        <input id="site_title" name="site_title" type="text" placeholder="My AstroPress Site" required />
+
+        <label for="site_url">Site URL</label>
+        <input id="site_url" name="site_url" type="url" placeholder="https://example.com" required />
+        <p class="hint">The full URL where your site will be accessible.</p>
+
+        <label for="tagline">Tagline <span style="font-weight:400;color:#646970">(optional)</span></label>
+        <input id="tagline" name="tagline" type="text" placeholder="Just another AstroPress site" />
+
+        <hr class="divider" />
+
+        <h2>Admin Account</h2>
+        <label for="admin_email">Admin Email</label>
+        <input id="admin_email" name="admin_email" type="email" placeholder="admin@example.com" required />
+
+        <label for="admin_password">Password</label>
+        <input id="admin_password" name="admin_password" type="password" required minlength="8" />
+
+        <label for="admin_password2">Confirm Password</label>
+        <input id="admin_password2" name="admin_password2" type="password" required />
+
+        <button type="submit">Install AstroPress</button>
+      </form>
+    </div>
+  </body>
+</html>
